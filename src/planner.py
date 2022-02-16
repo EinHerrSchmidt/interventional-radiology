@@ -1,5 +1,4 @@
 from __future__ import division
-from statistics import mode
 from data_maker import DataMaker
 import pyomo.environ as pyo
 
@@ -7,13 +6,15 @@ import pyomo.environ as pyo
 class Planner:
 
     def __init__(self):
-        self.dataMaker = DataMaker()
         self.mainModel = pyo.AbstractModel()
         self.secondaryModel = pyo.AbstractModel()
         self.mainModelInstance = None
         self.secondaryModelInstance = None
         self.solver = pyo.SolverFactory('cplex')
         self.define_main_model()
+
+        self.optimumF1 = None
+        self.optimumF2 = None
 
     @staticmethod
     def main_model_objective_function(model):
@@ -53,9 +54,6 @@ class Planner:
     @staticmethod
     def optimum_f2_rule(model, optimumF2):
         return model.F[2] >= optimumF2
-
-    def common_initialization(self):
-        pass
 
     def define_common(self, model):
         model.I = pyo.Param(within=pyo.NonNegativeIntegers)
@@ -98,13 +96,15 @@ class Planner:
         model.f2_constraint = pyo.Constraint(
             rule=self.f2_rule)
 
-    # this model computes a solution with maximum urgency score among those having maximum operating room usage
-
+    # this model computes a solution with maximum urgency score among those having maximum
+    # operating room usage
     def define_main_model(self):
         self.define_common(self.mainModel)
         self.mainModel.objective = pyo.Objective(
             rule=self.main_model_objective_function, sense=pyo.maximize)
 
+    # this model computes a solution with minimum distance score, among those with maximum
+    # operating room usage and - secondly - maximum urgency
     def define_secondary_model(self, optimumF1, optimumF2):
         self.define_common(self.secondaryModel)
         self.secondaryModel.objective = pyo.Objective(
@@ -117,43 +117,15 @@ class Planner:
         self.secondaryModel.optimum_f2_constraint = pyo.Constraint(
             rule=lambda model, oF2=optimumF2: self.optimum_f2_rule(model, optimumF2))
 
-    def solve_main_model(self):
-        self.mainModelInstance = self.mainModel.create_instance(
-            self.dataMaker.make_example_data())
+    def solve_main_model(self, data):
+        self.mainModelInstance = self.mainModel.create_instance(data)
 
         self.solver.solve(self.mainModelInstance)
-        return {'F1': self.mainModelInstance.F[1].value,
-                'F2': self.mainModelInstance.F[2].value
-                }
+        self.optimumF1 = self.mainModelInstance.F[1].value
+        self.optimumF2 = self.mainModelInstance.F[2].value
 
-    def solve(self):
-        optima = self.solve_main_model()
-        self.define_secondary_model(optima['F1'], optima['F2'])
-        self.secondaryModelInstance = self.secondaryModel.create_instance(
-            self.dataMaker.make_example_data())
-
-        self.secondaryModelInstance.pprint()
-
+    def solve(self, data):
+        self.solve_main_model(data)
+        self.define_secondary_model(self.optimumF1, self.optimumF2)
+        self.secondaryModelInstance = self.secondaryModel.create_instance(data)
         self.solver.solve(self.secondaryModelInstance)
-
-    # def extractSolution(self, instance):
-    #    solutionGrid = [[0 for i in range(0, 9)] for j in range(0, 9)]
-    #    for i in instance.i:
-    #        for j in instance.j:
-    #            for n in instance.n:
-    #                if(instance.x[i, j, n].value == 1):
-    #                    solutionGrid[i-1][j-1] = n
-    #    return solutionGrid
-
-
-    # def print_solution(self, instance):
-    #    for i in instance.i:
-    #        for j in instance.j:
-    #            print(" ", end="")
-    #            for n in instance.n:
-    #                if(instance.x[i, j, n].value == 1):
-    #                    print(n, end="")
-    #        print()
-p = Planner()
-p.solve()
-p.secondaryModelInstance.display()
