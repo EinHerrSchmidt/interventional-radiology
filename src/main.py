@@ -4,16 +4,20 @@ import sys
 import os
 
 if __name__ == '__main__':
-    planner = Planner()
-    data = DataMaker().generate_example_data()
-    planner.solve(data)
-
     logDir = 'log'
     logFile = 'log.txt'
-
     if(not os.path.exists('../' + logDir)):
         os.mkdir('../' + logDir)
 
+    planner = Planner()
+
+    data = DataMaker().generate_example_data()
+    print(data)
+
+    planner.solve_model(data)
+
+
+
     sys.stdout = open('../' + logDir + '/' + logFile, 'w')
-    planner.secondaryModelInstance.display()
+    planner.modelInstance.display()
     sys.stdout.close()
