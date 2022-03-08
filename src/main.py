@@ -1,4 +1,4 @@
-from planner import Planner
+from planner_ord import Planner
 from data_maker import DataMaker
 import sys
 import os
@@ -14,10 +14,13 @@ if __name__ == '__main__':
     data = DataMaker().generate_example_data()
     print(data)
 
-    planner.solve_model(data)
+    planner.create_model_instance(data)
 
+    #sys.stdout = open('../' + logDir + '/' + logFile, 'w')
+    #planner.modelInstance.display()
+    #sys.stdout.close()
 
-
+    planner.solve_model()
     sys.stdout = open('../' + logDir + '/' + logFile, 'w')
     planner.modelInstance.display()
     sys.stdout.close()

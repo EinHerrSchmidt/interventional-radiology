@@ -1,6 +1,7 @@
 from __future__ import division
 from matplotlib.pyplot import semilogx
 import pyomo.environ as pyo
+import pyomo.gdp as pyogdp
 
 
 class Planner:
@@ -43,23 +44,40 @@ class Planner:
                    for i in model.i for k in model.k) <= model.An[alpha, t]
 
     # patients with same anesthetist on same day but different room cannot overlap
-    @staticmethod
-    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-            return pyo.Constraint.Skip
-        return (model.gamma[i1] + model.p[i1]) * model.a[i1] <= (model.gamma[i2] + model.bigM[2] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])) * model.a[i2] + model.bigM[3] * (1 - model.a[i2])
+    # @staticmethod
+    # def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+    #     if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+    #         return pyo.Constraint.Skip
+    #     return (model.gamma[i1] + model.p[i1]) * model.a[i1] <= (model.gamma[i2] + model.bigM[2] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])) * model.a[i2] + model.bigM[3] * (1 - model.a[i2])
 
-    # ensure gamma plus operation time does not exceed end of day
     @staticmethod
-    def end_of_day_rule(model, i, k, t):
-        return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
+    def anesthetist_no_overlap_rule1(model, i1, i2, k1, k2, t, alpha):
+        if(model.a[i1] * model.a[i2] == 0):
+            return pyo.Constraint.Skip
+        return sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) + model.p[i2]) >= - model.bigM[2] * (1 - model.Lambda[i2, i1]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
+
+    @staticmethod
+    def anesthetist_no_overlap_rule2(model, i1, i2, k1, k2, t, alpha):
+        if(model.a[i1] * model.a[i2] == 0):
+            return pyo.Constraint.Skip
+        return sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) + model.p[i1]) >= - model.bigM[2] * (1 - model.Lambda[i1, i2]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
+
+    @staticmethod
+    def lambda_rule(model, i1, i2):
+        return model.Lambda[i1, i2] + model.Lambda[i2, i1] >= model.a[i1] * model.a[i2]
+    
+    @staticmethod
+    def single_lambda_rule(model, i1, i2):
+        if(i1 >= i2):
+            return pyo.Constraint.Skip
+        return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (1 - model.y[i1, i2, k, t])
+        return model.gamma[i1] <= model.gamma[i2] - 1 # + model.bigM[5] * (1 - model.y[i1, i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
@@ -78,12 +96,9 @@ class Planner:
     def define_model(self):
         self.model.I = pyo.Param(within=pyo.NonNegativeIntegers)  # patients
         self.model.J = pyo.Param(within=pyo.NonNegativeIntegers)  # specialties
-        self.model.K = pyo.Param(
-            within=pyo.NonNegativeIntegers)  # operating rooms
-        self.model.T = pyo.Param(
-            within=pyo.NonNegativeIntegers)  # horizon days
-        self.model.A = pyo.Param(
-            within=pyo.NonNegativeIntegers)  # anesthetists
+        self.model.K = pyo.Param(within=pyo.NonNegativeIntegers)  # op. rooms
+        self.model.T = pyo.Param(within=pyo.NonNegativeIntegers)  # week's days
+        self.model.A = pyo.Param(within=pyo.NonNegativeIntegers)  # anesthetists
         self.model.M = pyo.Param(within=pyo.NonNegativeIntegers)  # big Ms
 
         self.model.i = pyo.RangeSet(1, self.model.I)
@@ -112,6 +127,10 @@ class Planner:
 
         self.model.gamma = pyo.Var(self.model.i,
                                    domain=pyo.NonNegativeIntegers)
+
+        self.model.Lambda = pyo.Var(self.model.i,
+                                    self.model.i,
+                                    domain=pyo.Binary)
 
         # estimated surgery time
         self.model.p = pyo.Param(self.model.i)
@@ -170,19 +189,30 @@ class Planner:
             self.model.alpha,
             self.model.t,
             rule=self.anesthetist_time_rule)
-        self.model.anesthetist_no_overlap_constraint = pyo.Constraint(
+        self.model.anesthetist_no_overlap_constraint1 = pyo.Constraint(
             self.model.i,
             self.model.i,
             self.model.k,
             self.model.k,
             self.model.t,
             self.model.alpha,
-            rule=self.anesthetist_no_overlap_rule)
-        self.model.end_of_day_constraint = pyo.Constraint(
+            rule=self.anesthetist_no_overlap_rule1)
+        self.model.anesthetist_no_overlap_constraint2 = pyo.Constraint(
+            self.model.i,
             self.model.i,
             self.model.k,
+            self.model.k,
             self.model.t,
-            rule=self.end_of_day_rule)
+            self.model.alpha,
+            rule=self.anesthetist_no_overlap_rule2)
+        self.model.lambda_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            rule=self.lambda_rule)
+        self.model.single_lambda_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            rule=self.single_lambda_rule)
         self.model.precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
@@ -239,9 +269,9 @@ class Planner:
             for k in self.modelInstance.k:
                 for t in self.modelInstance.t:
                     spec = self.modelInstance.specialty[i]
-                    if(self.modelInstance.tau[spec, k, t] == 0):
-                        self.modelInstance.x[i, k, t].fix(0)
-                        fixed_variables += 1
+                    # if(self.modelInstance.tau[spec, k, t] == 0):
+                    #     self.modelInstance.x[i, k, t].fix(0)
+                    #     fixed_variables += 1
                     if(self.modelInstance.a[i] == 0):
                         self.modelInstance.anesthetist_assignment_constraint[i, k, t].deactivate()
                         deactivated_constraints += 1
@@ -250,7 +280,7 @@ class Planner:
         print("Fixed variables: " + str(fixed_variables))
 
     def solve_model(self):
-        self.fix_variables_and_deactivate_constraints()
+        # self.fix_variables_and_deactivate_constraints()
         self.solver.solve(self.modelInstance)
         print("Model instance solved")
 
