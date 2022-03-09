@@ -43,41 +43,57 @@ class Planner:
         return sum(model.beta[alpha, i, k, t] * model.p[i]
                    for i in model.i for k in model.k) <= model.An[alpha, t]
 
-    # patients with same anesthetist on same day but different room cannot overlap
-    # @staticmethod
-    # def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-    #     if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-    #         return pyo.Constraint.Skip
-    #     return (model.gamma[i1] + model.p[i1]) * model.a[i1] <= (model.gamma[i2] + model.bigM[2] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])) * model.a[i2] + model.bigM[3] * (1 - model.a[i2])
-
     @staticmethod
     def anesthetist_no_overlap_rule1(model, i1, i2, k1, k2, t, alpha):
-        if(model.a[i1] * model.a[i2] == 0):
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
         return sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) + model.p[i2]) >= - model.bigM[2] * (1 - model.Lambda[i2, i1]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
 
     @staticmethod
     def anesthetist_no_overlap_rule2(model, i1, i2, k1, k2, t, alpha):
-        if(model.a[i1] * model.a[i2] == 0):
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
         return sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) + model.p[i1]) >= - model.bigM[2] * (1 - model.Lambda[i1, i2]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
 
     @staticmethod
     def lambda_rule(model, i1, i2):
-        return model.Lambda[i1, i2] + model.Lambda[i2, i1] >= model.a[i1] * model.a[i2]
-    
-    @staticmethod
-    def single_lambda_rule(model, i1, i2):
         if(i1 >= i2):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
+    
+    # @staticmethod
+    # def single_lambda_rule(model, i1, i2):
+    #     if(i1 >= i2):
+    #         return pyo.Constraint.Skip
+    #     return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1] <= model.gamma[i2] - 1 # + model.bigM[5] * (1 - model.y[i1, i2, k, t])
+        return model.gamma[i1] <= model.gamma[i2] - 1 + model.bigM[5] * (1 - model.y[i1, i2, k, t])
+    
+    # to ensure ordering on gamma
+    @staticmethod
+    def absolute_value_rule1(model, i1, i2):
+        if(i1 == i2):
+            return pyo.Constraint.Skip
+        return model.gamma[i1] - model.gamma[i2] >= 1 - model.Lambda1[i1, i2] * model.bigM[5]
+
+    # to ensure ordering on gamma
+    @staticmethod
+    def absolute_value_rule2(model, i1, i2):
+        if(i1 == i2):
+            return pyo.Constraint.Skip
+        return model.gamma[i1] - model.gamma[i2] <= - 1 + (1 - model.Lambda1[i1, i2]) * model.bigM[5]
+
+    #to ensure ordering on gamma
+    @staticmethod
+    def gamma_ordering_rule(model, i1, i2):
+        if(i1 >= i2):
+            return pyo.Constraint.Skip
+        return model.Lambda1[i1, i2] + model.Lambda1[i2, i1] == 1
 
     # Covid patients after non-Covid patients
     @staticmethod
@@ -131,6 +147,10 @@ class Planner:
         self.model.Lambda = pyo.Var(self.model.i,
                                     self.model.i,
                                     domain=pyo.Binary)
+
+        self.model.Lambda1 = pyo.Var(self.model.i,
+                                     self.model.i,
+                                     domain=pyo.Binary)
 
         # estimated surgery time
         self.model.p = pyo.Param(self.model.i)
@@ -209,16 +229,28 @@ class Planner:
             self.model.i,
             self.model.i,
             rule=self.lambda_rule)
-        self.model.single_lambda_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            rule=self.single_lambda_rule)
+        # self.model.single_lambda_constraint = pyo.Constraint(
+        #     self.model.i,
+        #     self.model.i,
+        #     rule=self.single_lambda_rule)
         self.model.precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
             self.model.k,
             self.model.t,
             rule=self.precedence_rule)
+        self.model.absolute_value_constraint1 = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            rule=self.absolute_value_rule1)
+        self.model.absolute_value_constraint2 = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            rule=self.absolute_value_rule2)
+        self.model.gamma_ordering_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            rule=self.gamma_ordering_rule)
         self.model.covid_precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,

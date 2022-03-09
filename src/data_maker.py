@@ -68,13 +68,13 @@ class DataMaker:
             'p': self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True),
             'r': self.generate_truncnorm_sample(patients, lower=1, upper=120, mean=60, stdDev=10, isTime=False),
             'a': self.generate_binomial_sample(patients, 0.1, isSpecialty=False),
-            'c': self.generate_binomial_sample(patients, 0.2, isSpecialty=False),
+            'c': self.generate_binomial_sample(patients, 0.5, isSpecialty=False),
             'specialty': self.generate_binomial_sample(patients, 0.3, isSpecialty=True),
             'bigM': {
                 1: 1000000,
                 2: 1000000,
                 3: 1000000,
                 4: 1000000,
-                5: 1000000
+                5: patients
             }
         }}
