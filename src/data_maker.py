@@ -31,50 +31,58 @@ class DataMaker:
                 dict[(i + 1)] = int(sample[i])
         return dict
 
+    def create_room_timetable(self, K, T):
+        dict = {}
+        for k in range(0, K):
+            for t in range(0, T):
+                dict[(k + 1, t + 1)] = 480
+        return dict
+
+    def create_anestethists_timetable(self, A, T):
+        dict = {}
+        for a in range(0, A):
+            for t in range(0, T):
+                dict[(a + 1, t + 1)] = 480
+        return dict
+
+    def create_room_specialty_assignment(self, J, K, T):
+        dict = {}
+        for j in range(0, J):
+            for k in range(0, K):
+                for t in range(0, T):
+                    if((j + 1 == 1 and (k + 1 == 1 or k + 1 == 2)) or (j + 1 == 2 and (k + 1 == 3 or k + 1 == 4))):
+                        dict[(j + 1, k + 1, t + 1)] = 1
+                    else:
+                        dict[(j + 1, k + 1, t + 1)] = 0
+        return dict
+
     def generate_example_data(self):
         np.random.seed(seed=54667)
-        patients = 20
+        patients = 10
+        specialties = 2
+        rooms = 4
+        days = 1
+        anesthetists = 1
         return {None: {
             'I': {None: patients},
-            'J': {None: 2},
-            'K': {None: 4},
-            'T': {None: 5},
-            'A': {None: 2},
+            'J': {None: specialties},
+            'K': {None: rooms},
+            'T': {None: days},
+            'A': {None: anesthetists},
             'M': {None: 5},
-            's': {
-                (1, 1): 480, (2, 1): 480, (3, 1): 480, (4, 1): 480,
-                (1, 2): 480, (2, 2): 480, (3, 2): 480, (4, 2): 480,
-                (1, 3): 480, (2, 3): 480, (3, 3): 480, (4, 3): 480,
-                (1, 4): 480, (2, 4): 480, (3, 4): 480, (4, 4): 480,
-                (1, 5): 480, (2, 5): 480, (3, 5): 480, (4, 5): 480,
-            },
-            'An': {
-                (1, 1): 480, (1, 2): 480, (1, 3): 480, (1, 4): 480, (1, 5): 480,
-                (2, 1): 480, (2, 2): 480, (2, 3): 480, (2, 4): 480, (2, 5): 480,
-            },
-            'tau': {
-                (1, 1, 1): 1, (1, 2, 1): 1, (2, 3, 1): 1, (2, 4, 1): 1,
-                (1, 1, 2): 1, (1, 2, 2): 1, (2, 3, 2): 1, (2, 4, 2): 1,
-                (1, 1, 3): 1, (1, 2, 3): 1, (2, 3, 3): 1, (2, 4, 3): 1,
-                (1, 1, 4): 1, (1, 2, 4): 1, (2, 3, 4): 1, (2, 4, 4): 1,
-                (1, 1, 5): 1, (1, 2, 5): 1, (2, 3, 5): 1, (2, 4, 5): 1,
-
-                (2, 1, 1): 0, (2, 2, 1): 0, (1, 3, 1): 0, (1, 4, 1): 0,
-                (2, 1, 2): 0, (2, 2, 2): 0, (1, 3, 2): 0, (1, 4, 2): 0,
-                (2, 1, 3): 0, (2, 2, 3): 0, (1, 3, 3): 0, (1, 4, 3): 0,
-                (2, 1, 4): 0, (2, 2, 4): 0, (1, 3, 4): 0, (1, 4, 4): 0,
-                (2, 1, 5): 0, (2, 2, 5): 0, (1, 3, 5): 0, (1, 4, 5): 0,
-            },
+            's': self.create_room_timetable(rooms, days),
+            'An': self.create_anestethists_timetable(anesthetists, days),
+            'tau': self.create_room_specialty_assignment(specialties, rooms, days),
             'p': self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True),
             'r': self.generate_truncnorm_sample(patients, lower=1, upper=120, mean=60, stdDev=10, isTime=False),
-            'a': self.generate_binomial_sample(patients, 0.1, isSpecialty=False),
-            'c': self.generate_binomial_sample(patients, 0.5, isSpecialty=False),
-            'specialty': self.generate_binomial_sample(patients, 0.3, isSpecialty=True),
+            'a': self.generate_binomial_sample(patients, 0.7, isSpecialty=False),
+            'c': self.generate_binomial_sample(patients, 0.6, isSpecialty=False),
+            'specialty': self.generate_binomial_sample(patients, 0.4, isSpecialty=True),
             'bigM': {
-                1: 1000000,
-                2: 1000000,
-                3: 1000000,
-                4: 1000000,
-                5: patients
+                1: patients,
+                2: 100000,
+                3: 100000,
+                4: 100000,
+                5: 100000
             }
         }}

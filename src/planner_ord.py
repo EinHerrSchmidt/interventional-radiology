@@ -3,6 +3,8 @@ from matplotlib.pyplot import semilogx
 import pyomo.environ as pyo
 import pyomo.gdp as pyogdp
 
+from model import Patient
+
 
 class Planner:
 
@@ -60,12 +62,6 @@ class Planner:
         if(i1 >= i2):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
-    
-    # @staticmethod
-    # def single_lambda_rule(model, i1, i2):
-    #     if(i1 >= i2):
-    #         return pyo.Constraint.Skip
-    #     return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -319,3 +315,34 @@ class Planner:
     def create_model_instance(self, data):
         self.modelInstance = self.model.create_instance(data)
         print("Model instance created")
+
+    def extract_solution(self):
+        dict = {}
+        for k in self.modelInstance.k:
+            for t in self.modelInstance.t:
+                patients = []
+                for i in self.modelInstance.i:
+                        if(self.modelInstance.x[i, k, t].value == 1):
+                            p = self.modelInstance.p[i]
+                            c = self.modelInstance.c[i]
+                            a = self.modelInstance.a[i]
+                            anesthetist = 0
+                            if(a == 1):
+                                for alpha in self.modelInstance.alpha:
+                                    if(self.modelInstance.beta[alpha, i, k, t].value == 1):
+                                        anesthetist = alpha
+                            order = self.modelInstance.gamma[i].value
+                            specialty = self.modelInstance.specialty[i]
+                            patients.append(Patient(i, k, specialty, t, p, c, a, anesthetist, order))
+                patients.sort(key=lambda x: x.order)
+                dict[(k, t)] = patients
+        return dict
+
+    def print_solution(self):
+        solution = self.extract_solution()
+        for t in self.modelInstance.t:
+            for k in self.modelInstance.k:
+                print("Day: " + str(t) + "; Operating Room: S" + str(k) + "\n")
+                for patient in solution[(k,t)]:
+                    print(patient)
+                print("\n")

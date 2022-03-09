@@ -2,6 +2,8 @@ from __future__ import division
 from matplotlib.pyplot import semilogx
 import pyomo.environ as pyo
 
+from model import Patient
+
 
 class Planner:
 
@@ -47,19 +49,19 @@ class Planner:
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return (model.gamma[i1] + model.p[i1]) * model.a[i1] <= (model.gamma[i2] + model.bigM[2] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])) * model.a[i2] + model.bigM[3] * (1 - model.a[i2])
+        return (model.gamma[i1, k1, t] + model.p[i1]) * model.a[i1] <= (model.gamma[i2, k2, t] + model.bigM[2] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])) * model.a[i2] + model.bigM[3] * (1 - model.a[i2])
 
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
+        return model.gamma[i, k, t] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (1 - model.y[i1, i2, k, t])
+        return model.gamma[i1, k, t] + model.p[i1] <= model.gamma[i2, k, t] + model.bigM[5] * (1 - model.y[i1, i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
@@ -111,6 +113,8 @@ class Planner:
                                   domain=pyo.Binary)
 
         self.model.gamma = pyo.Var(self.model.i,
+                                    self.model.k,
+                                    self.model.t,
                                    domain=pyo.NonNegativeIntegers)
 
         # estimated surgery time
@@ -250,10 +254,41 @@ class Planner:
         print("Fixed variables: " + str(fixed_variables))
 
     def solve_model(self):
-        self.fix_variables_and_deactivate_constraints()
+        # self.fix_variables_and_deactivate_constraints()
         self.solver.solve(self.modelInstance)
         print("Model instance solved")
 
     def create_model_instance(self, data):
         self.modelInstance = self.model.create_instance(data)
         print("Model instance created")
+
+    def extract_solution(self):
+        dict = {}
+        for k in self.modelInstance.k:
+            for t in self.modelInstance.t:
+                patients = []
+                for i in self.modelInstance.i:
+                        if(self.modelInstance.x[i, k, t].value == 1):
+                            p = self.modelInstance.p[i]
+                            c = self.modelInstance.c[i]
+                            a = self.modelInstance.a[i]
+                            anesthetist = 0
+                            if(a == 1):
+                                for alpha in self.modelInstance.alpha:
+                                    if(self.modelInstance.beta[alpha, i, k, t].value == 1):
+                                        anesthetist = alpha
+                            order = self.modelInstance.gamma[i, k, t].value
+                            specialty = self.modelInstance.specialty[i]
+                            patients.append(Patient(i, k, specialty, t, p, c, a, anesthetist, order))
+                patients.sort(key=lambda x: x.order)
+                dict[(k, t)] = patients
+        return dict
+
+    def print_solution(self):
+        solution = self.extract_solution()
+        for t in self.modelInstance.t:
+            for k in self.modelInstance.k:
+                print("Day: " + str(t) + "; Operating Room: S" + str(k) + "\n")
+                for patient in solution[(k,t)]:
+                    print(patient)
+                print("\n")
