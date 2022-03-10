@@ -14,6 +14,7 @@ class DataMaker:
                                     loc=mean,
                                     scale=stdDev)
         sample = truncatedNormal.rvs(patients)
+        print(str(sum(sample)))
         return self.create_dictionary_entry(sample, isTime)
 
     def generate_binomial_sample(self, patients, p, isSpecialty):
@@ -58,11 +59,12 @@ class DataMaker:
 
     def generate_example_data(self):
         np.random.seed(seed=54667)
-        patients = 10
+        patients = 100
         specialties = 2
         rooms = 4
         days = 1
-        anesthetists = 1
+        anesthetists = 2
+        operatingTimes = self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True)
         return {None: {
             'I': {None: patients},
             'J': {None: specialties},
@@ -73,16 +75,16 @@ class DataMaker:
             's': self.create_room_timetable(rooms, days),
             'An': self.create_anestethists_timetable(anesthetists, days),
             'tau': self.create_room_specialty_assignment(specialties, rooms, days),
-            'p': self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True),
+            'p': operatingTimes,
             'r': self.generate_truncnorm_sample(patients, lower=1, upper=120, mean=60, stdDev=10, isTime=False),
-            'a': self.generate_binomial_sample(patients, 0.7, isSpecialty=False),
-            'c': self.generate_binomial_sample(patients, 0.6, isSpecialty=False),
+            'a': self.generate_binomial_sample(patients, 1.0, isSpecialty=False),
+            'c': self.generate_binomial_sample(patients, 0.3, isSpecialty=False),
             'specialty': self.generate_binomial_sample(patients, 0.4, isSpecialty=True),
             'bigM': {
                 1: patients,
-                2: 100000,
-                3: 100000,
-                4: 100000,
-                5: 100000
+                2: 5000,
+                3: 5000,
+                4: 5000,
+                5: 5000
             }
         }}

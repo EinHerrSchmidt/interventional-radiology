@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
     planner.solve_model()
     sys.stdout = open('../' + logDir + '/' + logFile, 'w')
-    planner.modelInstance.display()
+    # planner.modelInstance.display()
     planner.print_solution()
     sys.stdout.close()
 
