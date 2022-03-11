@@ -100,7 +100,7 @@ class Planner:
     def anesthesia_total_time_rule(model, k, t):
         #if(model.a[i] * model.rho[i, 2] == 0):
         #    return pyo.Constraint.Skip
-        return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 240
+        return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 480
 
 
     def define_model(self):

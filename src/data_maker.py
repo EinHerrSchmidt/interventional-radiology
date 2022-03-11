@@ -100,8 +100,8 @@ class DataMaker:
             'bigM': {
                 1: patients,
                 2: 5000,
-                3: 15,
+                3: patients,
                 4: 5000,
-                5: 15
+                5: patients
             }
         }}
