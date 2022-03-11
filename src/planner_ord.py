@@ -1,7 +1,6 @@
 from __future__ import division
 from matplotlib.pyplot import semilogx
 import pyomo.environ as pyo
-import pyomo.gdp as pyogdp
 
 from model import Patient
 
@@ -12,6 +11,8 @@ class Planner:
         self.model = pyo.AbstractModel()
         self.modelInstance = None
         self.solver = pyo.SolverFactory('cplex')
+        self.solver.options['timelimit'] = 900
+        # self.solver.options['mipgap'] = 0.5
         self.define_model()
 
     @staticmethod
@@ -34,69 +35,44 @@ class Planner:
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
     # assign an anesthetist if and only if a patient needs her
-    @staticmethod
-    def anesthetist_assignment_rule(model, i, k, t):
-        return sum(model.beta[alpha, i, k, t]
-                   for alpha in model.alpha) == model.a[i]*model.x[i, k, t]
+    # @staticmethod
+    # def anesthetist_assignment_rule(model, i, k, t):
+    #     return sum(model.beta[alpha, i, k, t]
+    #                for alpha in model.alpha) == model.a[i]*model.x[i, k, t]
 
     # do not exceed anesthetist time in each day
-    @staticmethod
-    def anesthetist_time_rule(model, alpha, t):
-        return sum(model.beta[alpha, i, k, t] * model.p[i]
-                   for i in model.i for k in model.k) <= model.An[alpha, t]
+    #@staticmethod
+    #def anesthetist_time_rule(model, alpha, t):
+    #    return sum(model.beta[alpha, i, k, t] * model.p[i]
+    #               for i in model.i for k in model.k) <= model.An[alpha, t]
 
-    @staticmethod
-    def anesthetist_no_overlap_rule1(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-            return pyo.Constraint.Skip
-        return sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) + model.p[i2]) >= - model.bigM[2] * (1 - model.Lambda[i2, i1]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
+    # patients with same anesthetist on same day but different room cannot overlap
+    # @staticmethod
+    # def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+    #     if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+    #         return pyo.Constraint.Skip
+    #     return model.gamma[i1, k1, t] + model.p[i1] <= model.gamma[i2, k2, t] + model.bigM[2] * (5 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] - model.Lambda[i1, i2, t])
 
-    @staticmethod
-    def anesthetist_no_overlap_rule2(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-            return pyo.Constraint.Skip
-        return sum(model.y[i3, i2, k2, t] * model.p[i3] for i3 in model.i) - (sum(model.y[i3, i1, k1, t] * model.p[i3] for i3 in model.i) + model.p[i1]) >= - model.bigM[2] * (1 - model.Lambda[i1, i2]) - model.bigM[3] * (2 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t])
-
-    @staticmethod
-    def lambda_rule(model, i1, i2):
-        if(i1 >= i2):
-            return pyo.Constraint.Skip
-        return model.Lambda[i1, i2] + model.Lambda[i2, i1] == 1
+    # precedence across rooms, same day
+    # @staticmethod
+    # def lambda_rule(model, i1, i2, t):
+    #     if(i1 >= i2):
+    #         return pyo.Constraint.Skip
+    #     return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1] <= model.gamma[i2] - 1 + model.bigM[5] * (1 - model.y[i1, i2, k, t])
-    
-    # to ensure ordering on gamma
-    @staticmethod
-    def absolute_value_rule1(model, i1, i2):
-        if(i1 == i2):
-            return pyo.Constraint.Skip
-        return model.gamma[i1] - model.gamma[i2] >= 1 - model.Lambda1[i1, i2] * model.bigM[5]
-
-    # to ensure ordering on gamma
-    @staticmethod
-    def absolute_value_rule2(model, i1, i2):
-        if(i1 == i2):
-            return pyo.Constraint.Skip
-        return model.gamma[i1] - model.gamma[i2] <= - 1 + (1 - model.Lambda1[i1, i2]) * model.bigM[5]
-
-    #to ensure ordering on gamma
-    @staticmethod
-    def gamma_ordering_rule(model, i1, i2):
-        if(i1 >= i2):
-            return pyo.Constraint.Skip
-        return model.Lambda1[i1, i2] + model.Lambda1[i2, i1] == 1
+        return model.gamma[i1, k, t] <= model.gamma[i2, k, t] - 1 + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
     def covid_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2):
+        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1 )):
             return pyo.Constraint.Skip
-        return model.y[i1, i2, k, t] >= (1 - model.c[i1]) * model.c[i2]
+        return model.gamma[i1, k, t] * (1 - model.c[i1]) <= model.gamma[i2, k, t] *  model.c[i2] + model.bigM[3] * (1 - model.c[i2])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
@@ -105,19 +81,44 @@ class Planner:
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
+    # if patient i has specialty 1 and needs anesthesia, then he cannot be in room 2
+    @staticmethod
+    def anesthesia_S1_rule(model, i):
+        if(model.a[i] * model.rho[i, 1] == 0):
+            return pyo.Constraint.Skip
+        return sum(model.x[i, 2, t] * model.a[i] for t in model.t) <= 1 - model.rho[i, 1]
+
+    # if patient i has specialty 2 and needs anesthesia, then he cannot be in room 4
+    @staticmethod
+    def anesthesia_S3_rule(model, i):
+        if(model.a[i] * model.rho[i, 2] == 0):
+            return pyo.Constraint.Skip
+        return sum(model.x[i, 4, t] * model.a[i] for t in model.t) <= 1 - model.rho[i, 2]
+
+    # patients needing anesthesia cannot exceed anesthesia total time in each room
+    @staticmethod
+    def anesthesia_total_time_rule(model, k, t):
+        #if(model.a[i] * model.rho[i, 2] == 0):
+        #    return pyo.Constraint.Skip
+        return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 240
+
+
     def define_model(self):
         self.model.I = pyo.Param(within=pyo.NonNegativeIntegers)  # patients
         self.model.J = pyo.Param(within=pyo.NonNegativeIntegers)  # specialties
-        self.model.K = pyo.Param(within=pyo.NonNegativeIntegers)  # op. rooms
-        self.model.T = pyo.Param(within=pyo.NonNegativeIntegers)  # week's days
-        self.model.A = pyo.Param(within=pyo.NonNegativeIntegers)  # anesthetists
+        self.model.K = pyo.Param(
+            within=pyo.NonNegativeIntegers)  # operating rooms
+        self.model.T = pyo.Param(
+            within=pyo.NonNegativeIntegers)  # horizon days
+        # self.model.A = pyo.Param(
+        #     within=pyo.NonNegativeIntegers)  # anesthetists
         self.model.M = pyo.Param(within=pyo.NonNegativeIntegers)  # big Ms
 
         self.model.i = pyo.RangeSet(1, self.model.I)
         self.model.j = pyo.RangeSet(1, self.model.J)
         self.model.k = pyo.RangeSet(1, self.model.K)
         self.model.t = pyo.RangeSet(1, self.model.T)
-        self.model.alpha = pyo.RangeSet(1, self.model.A)
+        # self.model.alpha = pyo.RangeSet(1, self.model.A)
         self.model.bm = pyo.RangeSet(1, self.model.M)
 
         self.model.x = pyo.Var(self.model.i,
@@ -131,22 +132,21 @@ class Planner:
                                self.model.t,
                                domain=pyo.Binary)
 
-        self.model.beta = pyo.Var(self.model.alpha,
-                                  self.model.i,
-                                  self.model.k,
-                                  self.model.t,
-                                  domain=pyo.Binary)
+        # self.model.beta = pyo.Var(self.model.alpha,
+        #                           self.model.i,
+        #                           self.model.k,
+        #                           self.model.t,
+        #                           domain=pyo.Binary)
 
         self.model.gamma = pyo.Var(self.model.i,
+                                    self.model.k,
+                                    self.model.t,
                                    domain=pyo.NonNegativeIntegers)
 
-        self.model.Lambda = pyo.Var(self.model.i,
-                                    self.model.i,
-                                    domain=pyo.Binary)
-
-        self.model.Lambda1 = pyo.Var(self.model.i,
-                                     self.model.i,
-                                     domain=pyo.Binary)
+        # self.model.Lambda = pyo.Var(self.model.i,
+        #                             self.model.i,
+        #                             self.model.t,
+        #                            domain=pyo.Binary)
 
         # estimated surgery time
         self.model.p = pyo.Param(self.model.i)
@@ -167,7 +167,7 @@ class Planner:
         self.model.s = pyo.Param(self.model.k, self.model.t)
 
         # anesthetists' available time
-        self.model.An = pyo.Param(self.model.alpha, self.model.t)
+        # self.model.An = pyo.Param(self.model.alpha, self.model.t)
 
         # need for anesthesia
         self.model.a = pyo.Param(self.model.i)
@@ -180,6 +180,8 @@ class Planner:
 
         # specialty needed by each patient
         self.model.specialty = pyo.Param(self.model.i)
+
+        self.model.rho = pyo.Param(self.model.i, self.model.j)
 
         # big Ms
         self.model.bigM = pyo.Param(self.model.bm)
@@ -196,57 +198,34 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.specialty_assignment_rule)
-        self.model.anesthetist_assignment_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.k,
-            self.model.t,
-            rule=self.anesthetist_assignment_rule)
-        self.model.anesthetist_time_constraint = pyo.Constraint(
-            self.model.alpha,
-            self.model.t,
-            rule=self.anesthetist_time_rule)
-        self.model.anesthetist_no_overlap_constraint1 = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            self.model.k,
-            self.model.k,
-            self.model.t,
-            self.model.alpha,
-            rule=self.anesthetist_no_overlap_rule1)
-        self.model.anesthetist_no_overlap_constraint2 = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            self.model.k,
-            self.model.k,
-            self.model.t,
-            self.model.alpha,
-            rule=self.anesthetist_no_overlap_rule2)
-        self.model.lambda_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            rule=self.lambda_rule)
-        # self.model.single_lambda_constraint = pyo.Constraint(
+        # self.model.anesthetist_assignment_constraint = pyo.Constraint(
+        #     self.model.i,
+        #     self.model.k,
+        #     self.model.t,
+        #     rule=self.anesthetist_assignment_rule)
+        # self.model.anesthetist_time_constraint = pyo.Constraint(
+        #     self.model.alpha,
+        #     self.model.t,
+        #     rule=self.anesthetist_time_rule)
+        # self.model.anesthetist_no_overlap_constraint = pyo.Constraint(
         #     self.model.i,
         #     self.model.i,
-        #     rule=self.single_lambda_rule)
+        #     self.model.k,
+        #     self.model.k,
+        #     self.model.t,
+        #     self.model.alpha,
+        #     rule=self.anesthetist_no_overlap_rule)
+        # self.model.lambda_constraint = pyo.Constraint(
+        #     self.model.i,
+        #     self.model.i,
+        #     self.model.t,
+        #     rule=self.lambda_rule)
         self.model.precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
             self.model.k,
             self.model.t,
             rule=self.precedence_rule)
-        self.model.absolute_value_constraint1 = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            rule=self.absolute_value_rule1)
-        self.model.absolute_value_constraint2 = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            rule=self.absolute_value_rule2)
-        self.model.gamma_ordering_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            rule=self.gamma_ordering_rule)
         self.model.covid_precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
@@ -259,58 +238,24 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.exclusive_precedence_rule)
+        self.model.anesthesia_S1_constraint = pyo.Constraint(
+            self.model.i,
+            rule=self.anesthesia_S1_rule)
+        self.model.anesthesia_S3_constraint = pyo.Constraint(
+            self.model.i,
+            rule=self.anesthesia_S3_rule)
+        self.model.anesthesia_total_time_constraint = pyo.Constraint(
+            self.model.k,
+            self.model.t,
+            rule=self.anesthesia_total_time_rule)
+            
 
         self.model.objective = pyo.Objective(
             rule=self.objective_function, sense=pyo.maximize)
 
-    def fix_variables_and_deactivate_constraints(self):
-        deactivated_constraints = 0
-        fixed_variables = 0
-        for i1 in self.modelInstance.i:
-            for i2 in self.modelInstance.i:
-                for k in self.modelInstance.k:
-                    for t in self.modelInstance.t:
-                        if(self.modelInstance.specialty[i1] != self.modelInstance.specialty[i2] or i1 == i2):
-                            self.modelInstance.y[i1, i2, k, t].fix(0)
-                            fixed_variables += 1
-                            if(i1 < i2):
-                                self.modelInstance.exclusive_precedence_constraint[i1, i2, k, t].deactivate()
-                                deactivated_constraints += 1
-                            if(i1 != i2):
-                                self.modelInstance.covid_precedence_constraint[i1, i2, k, t].deactivate()
-                                self.modelInstance.precedence_constraint[i1, i2, k, t].deactivate()
-                                deactivated_constraints += 2
-                        if(self.modelInstance.c[i1] == 1 or self.modelInstance.c[i2] == 0):
-                            if(i1 != i2):
-                                self.modelInstance.covid_precedence_constraint[i1, i2, k, t].deactivate()
-                                deactivated_constraints += 1
-
-        for alpha in self.modelInstance.alpha:
-            for i in self.modelInstance.i:
-                for k in self.modelInstance.k:
-                    for t in self.modelInstance.t:
-                        if(self.modelInstance.a[i] == 0):
-                            self.modelInstance.beta[alpha, i, k, t].fix(0)
-                            fixed_variables += 1
-
-        for i in self.modelInstance.i:
-            for k in self.modelInstance.k:
-                for t in self.modelInstance.t:
-                    spec = self.modelInstance.specialty[i]
-                    # if(self.modelInstance.tau[spec, k, t] == 0):
-                    #     self.modelInstance.x[i, k, t].fix(0)
-                    #     fixed_variables += 1
-                    if(self.modelInstance.a[i] == 0):
-                        self.modelInstance.anesthetist_assignment_constraint[i, k, t].deactivate()
-                        deactivated_constraints += 1
-
-        print("Deactivated constraints: " + str(deactivated_constraints))
-        print("Fixed variables: " + str(fixed_variables))
-
     def solve_model(self):
-        # self.fix_variables_and_deactivate_constraints()
-        self.solver.solve(self.modelInstance)
-        print("Model instance solved")
+        self.model.results = self.solver.solve(self.modelInstance, tee=True)
+        print(self.model.results)
 
     def create_model_instance(self, data):
         self.modelInstance = self.model.create_instance(data)
@@ -327,13 +272,11 @@ class Planner:
                             c = self.modelInstance.c[i]
                             a = self.modelInstance.a[i]
                             anesthetist = 0
-                            if(a == 1):
-                                for alpha in self.modelInstance.alpha:
-                                    if(self.modelInstance.beta[alpha, i, k, t].value == 1):
-                                        anesthetist = alpha
-                            order = self.modelInstance.gamma[i].value
+
+                            order = self.modelInstance.gamma[i, k, t].value
                             specialty = self.modelInstance.specialty[i]
-                            patients.append(Patient(i, k, specialty, t, p, c, a, anesthetist, order))
+                            priority = self.modelInstance.r[i]
+                            patients.append(Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
