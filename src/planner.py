@@ -51,12 +51,12 @@ class Planner:
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k1, t] + model.p[i1] <= model.gamma[i2, k2, t] + model.bigM[2] * (4 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] + model.Lambda[i2, i1, t])
+        return model.gamma[i1, k1, t] + model.p[i1] <= model.gamma[i2, k2, t] + model.bigM[2] * (5 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
     @staticmethod
-    def lambda_rule(model, i1, k1, i2, k2, t):
-        if(i1 >= i2 or k1 >= k2):
+    def lambda_rule(model, i1, i2, t):
+        if(i1 >= i2):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
@@ -70,7 +70,7 @@ class Planner:
     def precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] + model.p[i1] <= model.gamma[i2, k, t] + model.bigM[5] * (2 - model.x[i1, k, t] - model.x[i2, k, t] + model.y[i1, i2, k, t])
+        return model.gamma[i1, k, t] + model.p[i1] <= model.gamma[i2, k, t] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
@@ -198,9 +198,7 @@ class Planner:
             rule=self.anesthetist_no_overlap_rule)
         self.model.lambda_constraint = pyo.Constraint(
             self.model.i,
-            self.model.k,
             self.model.i,
-            self.model.k,
             self.model.t,
             rule=self.lambda_rule)
         self.model.end_of_day_constraint = pyo.Constraint(
