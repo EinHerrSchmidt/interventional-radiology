@@ -34,32 +34,6 @@ class Planner:
     def specialty_assignment_rule(model, j, k, t):
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
-    # assign an anesthetist if and only if a patient needs her
-    # @staticmethod
-    # def anesthetist_assignment_rule(model, i, k, t):
-    #     return sum(model.beta[alpha, i, k, t]
-    #                for alpha in model.alpha) == model.a[i]*model.x[i, k, t]
-
-    # do not exceed anesthetist time in each day
-    #@staticmethod
-    #def anesthetist_time_rule(model, alpha, t):
-    #    return sum(model.beta[alpha, i, k, t] * model.p[i]
-    #               for i in model.i for k in model.k) <= model.An[alpha, t]
-
-    # patients with same anesthetist on same day but different room cannot overlap
-    # @staticmethod
-    # def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-    #     if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-    #         return pyo.Constraint.Skip
-    #     return model.gamma[i1, k1, t] + model.p[i1] <= model.gamma[i2, k2, t] + model.bigM[2] * (5 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] - model.Lambda[i1, i2, t])
-
-    # precedence across rooms, same day
-    # @staticmethod
-    # def lambda_rule(model, i1, i2, t):
-    #     if(i1 >= i2):
-    #         return pyo.Constraint.Skip
-    #     return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
-
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def precedence_rule(model, i1, i2, k, t):
@@ -121,65 +95,7 @@ class Planner:
         # self.model.alpha = pyo.RangeSet(1, self.model.A)
         self.model.bm = pyo.RangeSet(1, self.model.M)
 
-        self.model.x = pyo.Var(self.model.i,
-                               self.model.k,
-                               self.model.t,
-                               domain=pyo.Binary)
 
-        self.model.y = pyo.Var(self.model.i,
-                               self.model.i,
-                               self.model.k,
-                               self.model.t,
-                               domain=pyo.Binary)
-
-        # self.model.beta = pyo.Var(self.model.alpha,
-        #                           self.model.i,
-        #                           self.model.k,
-        #                           self.model.t,
-        #                           domain=pyo.Binary)
-
-        self.model.gamma = pyo.Var(self.model.i,
-                                    self.model.k,
-                                    self.model.t,
-                                   domain=pyo.NonNegativeIntegers)
-
-        # self.model.Lambda = pyo.Var(self.model.i,
-        #                             self.model.i,
-        #                             self.model.t,
-        #                            domain=pyo.Binary)
-
-        # estimated surgery time
-        self.model.p = pyo.Param(self.model.i)
-
-        # Maximum Time Before Treatment
-        # self.model.m = pyo.Param(self.model.i)
-
-        # referral day
-        # self.model.l = pyo.Param(self.model.i)
-
-        # time elapsed in waiting list at planning time
-        # self.model.L = pyo.Param(self.model.i)
-
-        # priority coefficient
-        self.model.r = pyo.Param(self.model.i)
-
-        # operating room/surgery team temporal availability
-        self.model.s = pyo.Param(self.model.k, self.model.t)
-
-        # anesthetists' available time
-        # self.model.An = pyo.Param(self.model.alpha, self.model.t)
-
-        # need for anesthesia
-        self.model.a = pyo.Param(self.model.i)
-
-        # Covid infection
-        self.model.c = pyo.Param(self.model.i)
-
-        # medical specialty for each (k, t)
-        self.model.tau = pyo.Param(self.model.j, self.model.k, self.model.t)
-
-        # specialty needed by each patient
-        self.model.specialty = pyo.Param(self.model.i)
 
         self.model.rho = pyo.Param(self.model.i, self.model.j)
 
@@ -220,12 +136,7 @@ class Planner:
         #     self.model.i,
         #     self.model.t,
         #     rule=self.lambda_rule)
-        self.model.precedence_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            self.model.k,
-            self.model.t,
-            rule=self.precedence_rule)
+
         self.model.covid_precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
@@ -238,16 +149,7 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.exclusive_precedence_rule)
-        self.model.anesthesia_S1_constraint = pyo.Constraint(
-            self.model.i,
-            rule=self.anesthesia_S1_rule)
-        self.model.anesthesia_S3_constraint = pyo.Constraint(
-            self.model.i,
-            rule=self.anesthesia_S3_rule)
-        self.model.anesthesia_total_time_constraint = pyo.Constraint(
-            self.model.k,
-            self.model.t,
-            rule=self.anesthesia_total_time_rule)
+
             
 
         self.model.objective = pyo.Objective(

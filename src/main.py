@@ -1,4 +1,4 @@
-from planner_ord import Planner
+from planner import Planner
 from data_maker import DataMaker
 import sys
 import os

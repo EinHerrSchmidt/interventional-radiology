@@ -15,13 +15,13 @@ class DataMaker:
                                     scale=stdDev)
         sample = truncatedNormal.rvs(patients)
         print(str(sum(sample)))
-        return self.create_dictionary_entry(sample, isTime)
+        return sample
 
     def generate_binomial_sample(self, patients, p, isSpecialty):
         sample = binom.rvs(1, p, size=patients)
         if(isSpecialty):
             sample = sample + 1
-        return self.create_dictionary_entry(sample, isTime=False)
+        return sample
 
     def create_dictionary_entry(self, sample, isTime):
         dict = {}
@@ -69,39 +69,41 @@ class DataMaker:
 
     def generate_example_data(self):
         np.random.seed(seed=54667)
-        patients = 50
+        patients = 100
         totalSpecialties = 2
         operatingRooms = 4
-        days = 1
+        days = 5
         anesthetists = 2
         operatingRoomTimes = self.create_room_timetable(operatingRooms, days)
         anesthetistsTimes = self.create_anestethists_timetable(anesthetists, days)
         operatingTimes = self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True)
         priorities = self.generate_truncnorm_sample(patients, lower=1, upper=120, mean=60, stdDev=10, isTime=False)
-        anesthesiaFlags = self.generate_binomial_sample(patients, 0.5, isSpecialty=False)
-        covidFlags = self.generate_binomial_sample(patients, 0.3, isSpecialty=False)
-        specialtyLabels = self.generate_binomial_sample(patients, 0.4, isSpecialty=True)
+        anesthesiaFlags = self.generate_binomial_sample(patients, 0.1, isSpecialty=False)
+        covidFlags = self.generate_binomial_sample(patients, 0.5, isSpecialty=False)
+        specialtyLabels = self.create_dictionary_entry(self.generate_binomial_sample(patients, 0.4, isSpecialty=True), isTime=False)
         return {None: {
             'I': {None: patients},
             'J': {None: totalSpecialties},
             'K': {None: operatingRooms},
             'T': {None: days},
             'A': {None: anesthetists},
-            'M': {None: 5},
+            'M': {None: 7},
             's': operatingRoomTimes,
             'An': anesthetistsTimes,
             'tau': self.create_room_specialty_assignment(totalSpecialties, operatingRooms, days),
-            'p': operatingTimes,
-            'r': priorities,
-            'a': anesthesiaFlags,
-            'c': covidFlags,
+            'p': self.create_dictionary_entry(operatingTimes, isTime=True),
+            'r': self.create_dictionary_entry(priorities, isTime=False),
+            'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
+            'c': self.create_dictionary_entry(covidFlags, isTime=False),
             'specialty': specialtyLabels,
             'rho': self.create_patient_specialty_table(patients, totalSpecialties, specialtyLabels),
             'bigM': {
                 1: patients,
-                2: 5000,
-                3: patients,
-                4: 5000,
-                5: patients
+                2: sum(operatingTimes),
+                3: sum(operatingTimes),
+                4: sum(operatingTimes),
+                5: sum(operatingTimes),
+                6: patients,
+                7: patients
             }
         }}

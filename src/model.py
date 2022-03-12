@@ -12,4 +12,4 @@ class Patient:
         self.order = order
 
     def __str__(self):
-        return f'id:{self.id:10}; priority:{self.priority:10}; room:{self.room:10}; specialty:{self.specialty:10}; day:{self.day:10}; operatingTime:{self.operatingTime:10}; covid:{self.covid:10}; anesthesia:{self.anesthesia:10}; anesthetist:{self.anesthetist:10}; order:{self.order:10};'
+        return f'id:{self.id:4}; priority:{self.priority:4}; room:{self.room:2}; specialty:{self.specialty:2}; day:{self.day:2}; operatingTime:{self.operatingTime:4}; covid:{self.covid:2}; anesthesia:{self.anesthesia:2}; anesthetist:{self.anesthetist:2}; order:{self.order:6};'
