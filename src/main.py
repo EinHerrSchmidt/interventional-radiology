@@ -14,12 +14,12 @@ if __name__ == '__main__':
                       solver="cplex")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 10
+    dataDescriptor.patients = 60
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 1
     dataDescriptor.covidFrequence = 0.3
     dataDescriptor.anesthesiaFrequence = 0.2
-    dataDescriptor.specialtyBalance = 0.5
+    dataDescriptor.specialtyBalance = 0.3
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
                                                                          mean=60,
@@ -29,7 +29,7 @@ if __name__ == '__main__':
                                                                     mean=60,
                                                                     stdDev=10)
     dataMaker = DataMaker()
-    data = dataMaker.generate_data(dataDescriptor, seed=54977)
+    data = dataMaker.generate_data(dataDescriptor, seed=52876)
 
     sys.stdout = open('../' + logDir + '/' + logFile, 'w')
     print("Data description:\n")
