@@ -1,5 +1,5 @@
-from planner import Planner
-from data_maker import DataMaker
+from planner import ModelType, Planner
+from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 import sys
 import os
 
@@ -9,21 +9,41 @@ if __name__ == '__main__':
     if(not os.path.exists('../' + logDir)):
         os.mkdir('../' + logDir)
 
-    planner = Planner()
+    planner = Planner(timeLimit=900,
+                      modelType=ModelType.START_TIME_ORDERING,
+                      solver="cplex")
 
-    data = DataMaker().generate_example_data()
-    print(data)
+    dataDescriptor = DataDescriptor()
+    dataDescriptor.patients = 10
+    dataDescriptor.days = 5
+    dataDescriptor.anesthetists = 1
+    dataDescriptor.covidFrequence = 0.3
+    dataDescriptor.anesthesiaFrequence = 0.2
+    dataDescriptor.specialtyBalance = 0.5
+    dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
+                                                                         high=120,
+                                                                         mean=60,
+                                                                         stdDev=20)
+    dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
+                                                                    high=120,
+                                                                    mean=60,
+                                                                    stdDev=10)
+    dataMaker = DataMaker()
+    data = dataMaker.generate_data(dataDescriptor, seed=54977)
 
-    planner.create_model_instance(data)
-
-    #sys.stdout = open('../' + logDir + '/' + logFile, 'w')
-    # planner.modelInstance.display()
-    # sys.stdout.close()
-
-    planner.solve_model()
     sys.stdout = open('../' + logDir + '/' + logFile, 'w')
+    print("Data description:\n")
+    print(dataDescriptor)
+    print("\nPatients to be operated:\n")
+    dataMaker.print_data(data)
+
+    print("\nCreating model instance...")
+    planner.create_model_instance(data)
+    print("Model instance created.")
+
+    print("Beginning solving instance.")
+    planner.solve_model()
     # planner.modelInstance.display()
+    print("Possible solution, for each day and for each room:\n")
     planner.print_solution()
     sys.stdout.close()
-
-

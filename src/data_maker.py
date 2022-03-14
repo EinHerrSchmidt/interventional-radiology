@@ -1,20 +1,152 @@
+from typing_extensions import Self
 from venv import create
 from xmlrpc.client import MAXINT
 from scipy.stats import truncnorm
 from scipy.stats import binom
 import numpy as np
 
+from model import Patient
+
+
+class TruncatedNormalParameters:
+    def __init__(self, low, high, mean, stdDev):
+        self.low = low
+        self.high = high
+        self.mean = mean
+        self.stdDev = stdDev
+
+
+class DataDescriptor:
+    """Used to define properties of the sample to be generated."""
+
+    def __init__(self):
+        self._patients = None
+        self._specialties = 2
+        self._operatingRooms = 4
+        self._days = None
+        self._anesthetists = None
+        self._covidFrequence = None
+        self._anesthesiaFrequence = None
+        self._specialtyBalance = None
+        self._operatingTimeDistribution = None
+        self._priorityDistribution = None
+
+    @property
+    def patients(self):
+        """Get number of patients."""
+        return self._patients
+
+    @patients.setter
+    def patients(self, value):
+        self._patients = value
+
+    @property
+    def specialties(self):
+        """Get number of specialties."""
+        return self._specialties
+
+    @property
+    def operatingRooms(self):
+        """Get number of operating rooms."""
+        return self._operatingRooms
+
+    @property
+    def days(self):
+        """Get number of days in the planning horizon."""
+        return self._days
+
+    @days.setter
+    def days(self, value):
+        self._days = value
+
+    @property
+    def anesthetists(self):
+        """Get number of anesthetists."""
+        return self._anesthetists
+
+    @anesthetists.setter
+    def anesthetists(self, value):
+        self._anesthetists = value
+
+    @property
+    def covidFrequence(self):
+        """Get Covid infection frequency."""
+        return self._covidFrequence
+
+    @covidFrequence.setter
+    def covidFrequence(self, value):
+        self._covidFrequence = value
+
+    @property
+    def anesthesiaFrequence(self):
+        """Get anesthesia need frequency."""
+        return self._anesthesiaFrequence
+
+    @anesthesiaFrequence.setter
+    def anesthesiaFrequence(self, value):
+        self._anesthesiaFrequence = value
+
+    @property
+    def specialtyBalance(self):
+        """Get specialty balance."""
+        return self._specialtyBalance
+
+    @specialtyBalance.setter
+    def specialtyBalance(self, value):
+        self._specialtyBalance = value
+
+    @property
+    def operatingTimeDistribution(self):
+        """Get parameters of the Truncated Normal Distribution for generating operating times."""
+        return self._operatingTimeDistribution
+
+    @operatingTimeDistribution.setter
+    def operatingTimeDistribution(self, value):
+        self._operatingTimeDistribution = value
+
+    @property
+    def priorityDistribution(self):
+        """Get parameters of the Truncated Normal Distribution for generating priorities."""
+        return self._priorityDistribution
+
+    @priorityDistribution.setter
+    def priorityDistribution(self, value):
+        self._priorityDistribution = value
+
+    def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance, operatingTimeDistribution, priorityDistribution):
+        self.patients = patients
+        self.days = days
+        self.anesthetists = anesthetists
+        self.covidFrequence = covidFrequence
+        self.anesthesiaFrequence = anesthesiaFrequence
+        self.specialtyBalance = specialtyBalance
+        self.operatingTimeDistribution = operatingTimeDistribution
+        self.priorityDistribution = priorityDistribution
+
+    def __str__(self):
+        return f'Patients:{self.patients:17}\nDays:{self.days:21}\nAnesthetists:{self.anesthetists:13}\nCovid frequence:{self.covidFrequence:10}\nAnesthesia frequence:{self.anesthesiaFrequence:5}\nSpecialty balance:{self.specialtyBalance:8}\n\
+Distributions for operating times and priorities are Truncated Normal Distributions with parameters:\n\
+\tOperating times:\n\
+\t\tLow:{self.operatingTimeDistribution.low:20}\n\
+\t\tHigh:{self.operatingTimeDistribution.high:19}\n\
+\t\tMean:{self.operatingTimeDistribution.mean:19}\n\
+\t\tStandard deviation:{self.operatingTimeDistribution.stdDev:5}\n\
+\tPriorities:\n\
+\t\tLow:{self.priorityDistribution.low:20}\n\
+\t\tHigh:{self.priorityDistribution.high:19}\n\
+\t\tMean:{self.priorityDistribution.mean:19}\n\
+\t\tStandard deviation:{self.priorityDistribution.stdDev:5}'
+
 
 class DataMaker:
     def __init__(self):
         pass
 
-    def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev, isTime):
-        truncatedNormal = truncnorm((lower - mean) / stdDev, (upper - mean) / stdDev,
-                                    loc=mean,
-                                    scale=stdDev)
+    def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev):
+        a = (lower - mean) / stdDev
+        b = (upper - mean) / stdDev
+        truncatedNormal = truncnorm(a, b, loc=mean, scale=stdDev)
         sample = truncatedNormal.rvs(patients)
-        print(str(sum(sample)))
         return sample
 
     def generate_binomial_sample(self, patients, p, isSpecialty):
@@ -67,43 +199,80 @@ class DataMaker:
                         dict[(j + 1, k + 1, t + 1)] = 0
         return dict
 
-    def generate_example_data(self):
-        np.random.seed(seed=54667)
-        patients = 100
-        totalSpecialties = 2
-        operatingRooms = 4
-        days = 5
-        anesthetists = 2
-        operatingRoomTimes = self.create_room_timetable(operatingRooms, days)
-        anesthetistsTimes = self.create_anestethists_timetable(anesthetists, days)
-        operatingTimes = self.generate_truncnorm_sample(patients, 30, 120, 60, 20, isTime=True)
-        priorities = self.generate_truncnorm_sample(patients, lower=1, upper=120, mean=60, stdDev=10, isTime=False)
-        anesthesiaFlags = self.generate_binomial_sample(patients, 0.1, isSpecialty=False)
-        covidFlags = self.generate_binomial_sample(patients, 0.5, isSpecialty=False)
-        specialtyLabels = self.create_dictionary_entry(self.generate_binomial_sample(patients, 0.4, isSpecialty=True), isTime=False)
-        return {None: {
-            'I': {None: patients},
-            'J': {None: totalSpecialties},
-            'K': {None: operatingRooms},
-            'T': {None: days},
-            'A': {None: anesthetists},
-            'M': {None: 7},
-            's': operatingRoomTimes,
-            'An': anesthetistsTimes,
-            'tau': self.create_room_specialty_assignment(totalSpecialties, operatingRooms, days),
-            'p': self.create_dictionary_entry(operatingTimes, isTime=True),
-            'r': self.create_dictionary_entry(priorities, isTime=False),
-            'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
-            'c': self.create_dictionary_entry(covidFlags, isTime=False),
-            'specialty': specialtyLabels,
-            'rho': self.create_patient_specialty_table(patients, totalSpecialties, specialtyLabels),
-            'bigM': {
-                1: patients,
-                2: sum(operatingTimes),
-                3: sum(operatingTimes),
-                4: sum(operatingTimes),
-                5: sum(operatingTimes),
-                6: patients,
-                7: patients
+    def generate_data(self, dataDescriptor: DataDescriptor, seed):
+        np.random.seed(seed=seed)
+        operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms,
+                                                        dataDescriptor.days)
+        anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists,
+                                                               dataDescriptor.days)
+        operatingTimes = self.generate_truncnorm_sample(dataDescriptor.patients,
+                                                        dataDescriptor.operatingTimeDistribution.low,
+                                                        dataDescriptor.operatingTimeDistribution.high,
+                                                        dataDescriptor.operatingTimeDistribution.mean,
+                                                        dataDescriptor.operatingTimeDistribution.stdDev)
+        priorities = self.generate_truncnorm_sample(dataDescriptor.patients,
+                                                    dataDescriptor.priorityDistribution.low,
+                                                    dataDescriptor.priorityDistribution.high,
+                                                    dataDescriptor.priorityDistribution.mean,
+                                                    dataDescriptor.priorityDistribution.stdDev)
+        anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients,
+                                                        dataDescriptor.anesthesiaFrequence,
+                                                        isSpecialty=False)
+        covidFlags = self.generate_binomial_sample(dataDescriptor.patients,
+                                                   dataDescriptor.covidFrequence,
+                                                   isSpecialty=False)
+        specialties = self.generate_binomial_sample(dataDescriptor.patients,
+                                                    dataDescriptor.specialtyBalance,
+                                                    isSpecialty=True)
+        specialtyLabels = self.create_dictionary_entry(specialties,
+                                                       isTime=False)
+        totalOperatingTime = sum(operatingTimes)
+        return {
+            None: {
+                'I': {None: dataDescriptor.patients},
+                'J': {None: dataDescriptor.specialties},
+                'K': {None: dataDescriptor.operatingRooms},
+                'T': {None: dataDescriptor.days},
+                'A': {None: dataDescriptor.anesthetists},
+                'M': {None: 7},
+                's': operatingRoomTimes,
+                'An': anesthetistsTimes,
+                'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
+                'p': self.create_dictionary_entry(operatingTimes, isTime=True),
+                'r': self.create_dictionary_entry(priorities, isTime=False),
+                'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
+                'c': self.create_dictionary_entry(covidFlags, isTime=False),
+                'specialty': specialtyLabels,
+                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, specialtyLabels),
+                'bigM': {
+                    1: dataDescriptor.patients,
+                    2: totalOperatingTime,
+                    3: totalOperatingTime,
+                    4: totalOperatingTime,
+                    5: totalOperatingTime,
+                    6: dataDescriptor.patients,
+                    7: dataDescriptor.patients
+                }
             }
-        }}
+        }
+
+    def print_data(self, data):
+        patientNumber = data[None]['I'][None]
+        for i in range(0, patientNumber):
+            id = i + 1
+            priority = data[None]['r'][(i + 1)]
+            specialty = data[None]['specialty'][(i + 1)]
+            operatingTime = data[None]['p'][(i + 1)]
+            covid = data[None]['c'][(i + 1)]
+            anesthesia = data[None]['a'][(i + 1)]
+            print(Patient(id=id,
+                          priority=priority,
+                          specialty=specialty,
+                          operatingTime=operatingTime,
+                          covid=covid,
+                          anesthesia=anesthesia,
+                          room="N/A",
+                          day="N/A",
+                          anesthetist="N/A",
+                          order="N/A"
+                          ))

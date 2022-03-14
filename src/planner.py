@@ -1,20 +1,22 @@
 from __future__ import division
-from matplotlib.pyplot import semilogx
+from enum import Enum
 import pyomo.environ as pyo
 
 from model import Patient
 
+class ModelType(Enum):
+    START_TIME_ORDERING = 1
+    SIMPLE_ORDERING = 2
 
 class Planner:
 
-    def __init__(self):
+    def __init__(self, timeLimit, modelType, solver):
         self.model = pyo.AbstractModel()
         self.modelInstance = None
-        self.solver = pyo.SolverFactory('cplex')
-        self.solver.options['timelimit'] = 900
+        self.solver = pyo.SolverFactory(solver)
+        self.solver.options['timelimit'] = timeLimit
         # self.solver.options['mipgap'] = 0.5
-        self.modelType = "start-time-ordering"
-        # self.modelType = "simple-ordering"
+        self.modelType = modelType
         self.define_model()
 
     @staticmethod
@@ -162,7 +164,7 @@ class Planner:
         self.model.specialty = pyo.Param(self.model.i)
         self.model.bigM = pyo.Param(self.model.bm)
 
-        if(self.modelType == "start-time-ordering"):
+        if(self.modelType == ModelType.START_TIME_ORDERING):
             self.model.A = pyo.Param(within=pyo.NonNegativeIntegers)
             self.model.alpha = pyo.RangeSet(1, self.model.A)
             self.model.beta = pyo.Var(self.model.alpha,
@@ -177,7 +179,7 @@ class Planner:
             # anesthetists' available time
             self.model.An = pyo.Param(self.model.alpha, self.model.t)
 
-        if(self.modelType == "simple-ordering"):
+        if(self.modelType == ModelType.SIMPLE_ORDERING):
             self.model.rho = pyo.Param(self.model.i, self.model.j)
 
     def define_constraints(self):
@@ -201,7 +203,7 @@ class Planner:
             self.model.t,
             rule=self.exclusive_precedence_rule)
 
-        if(self.modelType == "start-time-ordering"):
+        if(self.modelType == ModelType.START_TIME_ORDERING):
             self.model.anesthetist_assignment_constraint = pyo.Constraint(
                 self.model.i,
                 self.model.k,
@@ -242,7 +244,7 @@ class Planner:
                 self.model.t,
                 rule=self.time_ordering_precedence_rule)
 
-        if(self.modelType == "simple-ordering"):
+        if(self.modelType == ModelType.SIMPLE_ORDERING):
             self.model.anesthesia_S1_constraint = pyo.Constraint(
                 self.model.i,
                 rule=self.anesthesia_S1_rule)
@@ -281,7 +283,6 @@ class Planner:
 
     def create_model_instance(self, data):
         self.modelInstance = self.model.create_instance(data)
-        print("Model instance created")
 
     def extract_solution(self):
         dict = {}
@@ -294,7 +295,7 @@ class Planner:
                         c = self.modelInstance.c[i]
                         a = self.modelInstance.a[i]
                         anesthetist = 0
-                        if(self.modelType == "start-time-ordering" and a == 1):
+                        if(self.modelType == ModelType.START_TIME_ORDERING and a == 1):
                             for alpha in self.modelInstance.alpha:
                                 if(self.modelInstance.beta[alpha, i, k, t].value == 1):
                                     anesthetist = alpha
