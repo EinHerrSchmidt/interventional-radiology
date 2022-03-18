@@ -250,8 +250,7 @@ class DataMaker:
                     3: totalOperatingTime,
                     4: totalOperatingTime,
                     5: totalOperatingTime,
-                    6: dataDescriptor.patients,
-                    7: dataDescriptor.patients
+                    6: dataDescriptor.patients
                 }
             }
         }

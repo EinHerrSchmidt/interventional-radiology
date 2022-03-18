@@ -81,7 +81,7 @@ class Planner:
     def simple_ordering_covid_precedence_rule(model, i1, i2, k, t):
         if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1)):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] * (1 - model.c[i1]) <= model.gamma[i2, k, t] * model.c[i2] + model.bigM[7] * (1 - model.c[i2])
+        return model.gamma[i1, k, t] * (1 - model.c[i1]) <= model.gamma[i2, k, t] - 1 + model.bigM[6] * (1 - model.c[i2])
 
     # Covid patients after non-Covid patients
     @staticmethod
@@ -117,13 +117,6 @@ class Planner:
     @staticmethod
     def anesthesia_total_time_rule(model, k, t):
         return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 480
-
-    # ensure that patient i1 terminates operation before i2, if y_12kt = 1
-    @staticmethod
-    def simple_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2):
-            return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] <= model.gamma[i2, k, t] - 1 + model.bigM[6] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def define_variables_and_params(self):
         self.model.I = pyo.Param(within=pyo.NonNegativeIntegers)
@@ -196,12 +189,6 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.specialty_assignment_rule)
-        self.model.exclusive_precedence_constraint = pyo.Constraint(
-            self.model.i,
-            self.model.i,
-            self.model.k,
-            self.model.t,
-            rule=self.exclusive_precedence_rule)
 
         if(self.modelType == ModelType.START_TIME_ORDERING):
             self.model.anesthetist_assignment_constraint = pyo.Constraint(
@@ -243,6 +230,12 @@ class Planner:
                 self.model.k,
                 self.model.t,
                 rule=self.time_ordering_precedence_rule)
+            self.model.exclusive_precedence_constraint = pyo.Constraint(
+                self.model.i,
+                self.model.i,
+                self.model.k,
+                self.model.t,
+                rule=self.exclusive_precedence_rule)
 
         if(self.modelType == ModelType.SIMPLE_ORDERING):
             self.model.anesthesia_S1_constraint = pyo.Constraint(
@@ -261,12 +254,6 @@ class Planner:
                 self.model.k,
                 self.model.t,
                 rule=self.simple_ordering_covid_precedence_rule)
-            self.model.precedence_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.simple_ordering_precedence_rule)
 
     def define_model(self):
 
