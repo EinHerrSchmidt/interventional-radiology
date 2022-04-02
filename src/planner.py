@@ -1,12 +1,17 @@
 from __future__ import division
 from enum import Enum
 import pyomo.environ as pyo
+import plotly.express as px
+import pandas as pd
+import datetime
 
 from model import Patient
+
 
 class ModelType(Enum):
     START_TIME_ORDERING = 1
     SIMPLE_ORDERING = 2
+
 
 class Planner:
 
@@ -14,8 +19,17 @@ class Planner:
         self.model = pyo.AbstractModel()
         self.modelInstance = None
         self.solver = pyo.SolverFactory(solver)
-        self.solver.options['timelimit'] = timeLimit
+        # CPLEX
+        # self.solver.options['timelimit'] = timeLimit
         # self.solver.options['mipgap'] = 0.5
+        # CBC
+        # self.solver.options['seconds'] = timeLimit
+        # self.solver.options['threads'] = 12
+        # self.solver.options['heuristics'] = "on"
+        # self.solver.options['ratioGAP'] = 0.05
+        # self.solver.options['preprocess'] = "on"
+        # self.solver.options['printingOptions'] = "normal"
+
         self.modelType = modelType
         self.define_model()
 
@@ -303,3 +317,47 @@ class Planner:
                 for patient in solution[(k, t)]:
                     print(patient)
                 print("\n")
+
+    # only for minute ordering, for now. To be extended
+    def plot_graph(self):
+        solution = self.extract_solution()
+        dataFrames = []
+        dff = pd.DataFrame([])
+        for t in self.modelInstance.t:
+            df = pd.DataFrame([])
+            for k in self.modelInstance.k:
+                for patient in solution[(k, t)]:
+                    start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=round(patient.order))
+                    finish = start + datetime.timedelta(minutes=round(patient.operatingTime))
+                    room = "S" + str(k)
+                    covid = "Y" if patient.covid == 1 else "N"
+                    anesthesia = "Y" if patient.anesthesia == 1 else "N"
+                    anesthetist = "A" + str(patient.anesthetist) if patient.anesthetist != 0 else ""
+                    dfToAdd = pd.DataFrame(
+                        [dict(Start=start, Finish=finish, Room=room, Covid=covid, Anesthesia=anesthesia, Anesthetist=anesthetist)])
+                    df = pd.concat([df, dfToAdd])
+            dataFrames.append(df)
+            dff = pd.concat([df, dff])
+
+        # import plotly.graph_objects as go
+        # fig = go.Figure()
+        fig = px.timeline(dff,
+                          x_start="Start",
+                          x_end="Finish",
+                          y="Room",
+                          color="Covid",
+                          text="Anesthetist",
+                          labels={
+                              "Start": "Surgery start",
+                              "Finish": "Surgery end",
+                              "Room": "Operating room",
+                              "Covid": "Covid patient",
+                              "Anesthesia": "Need for anesthesia",
+                              "Anesthetist": "Anesthetist"
+                          },
+                          hover_data=["Anesthesia", "Anesthetist"]
+        )
+
+        fig.update_layout(xaxis=dict(
+            title='Timetable', tickformat='%H:%M:%S',))
+        fig.show()
