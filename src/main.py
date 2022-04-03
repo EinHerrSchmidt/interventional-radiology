@@ -1,18 +1,14 @@
-from planner import ModelType, Planner
+from two_phase_planner import ModelType, Planner
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 
 if __name__ == '__main__':
-    #logDir = 'log'
-    #logFile = 'log.txt'
-    #if(not os.path.exists('../' + logDir)):
-    #    os.mkdir('../' + logDir)
 
     planner = Planner(timeLimit=900,
-                      modelType=ModelType.SIMPLE_ORDERING,
-                      solver="cplex")
+                      modelType=ModelType.START_TIME_ORDERING,
+                      solver="cbc")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 60
+    dataDescriptor.patients = 150
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.8
@@ -29,19 +25,11 @@ if __name__ == '__main__':
     dataMaker = DataMaker()
     data = dataMaker.generate_data(dataDescriptor, seed=52876)
 
-    # sys.stdout = open('../' + logDir + '/' + logFile, 'w')
     print("Data description:\n")
     print(dataDescriptor)
     print("\nPatients to be operated:\n")
     dataMaker.print_data(data)
-
-    print("\nCreating model instance...")
-    planner.create_model_instance(data)
-    print("Model instance created.")
-
-    print("Beginning solving instance.")
-    planner.solve_model()
-    # planner.modelInstance.display()
+    planner.solve_model(data)
     print("Possible solution, for each day and for each room:\n")
     planner.print_solution()
     # sys.stdout.close()
