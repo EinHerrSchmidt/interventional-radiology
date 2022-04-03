@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     planner = Planner(timeLimit=900,
                       modelType=ModelType.SIMPLE_ORDERING,
-                      solver="cbc")
+                      solver="cplex")
 
     dataDescriptor = DataDescriptor()
     dataDescriptor.patients = 60

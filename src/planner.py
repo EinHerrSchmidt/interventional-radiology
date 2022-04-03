@@ -20,12 +20,16 @@ class Planner:
         self.modelInstance = None
         self.solver = pyo.SolverFactory(solver)
         # CPLEX
-        # self.solver.options['timelimit'] = timeLimit
+        self.solver.options['timelimit'] = timeLimit
         # self.solver.options['mipgap'] = 0.5
         # CBC
         # self.solver.options['seconds'] = timeLimit
         # self.solver.options['threads'] = 12
         # self.solver.options['heuristics'] = "on"
+        # self.solver.options['round'] = "on"
+        # self.solver.options['feas'] = "on"
+        # self.solver.options['passF'] = 30
+        # self.solver.options['cuts'] = "off"
         # self.solver.options['ratioGAP'] = 0.05
         # self.solver.options['preprocess'] = "on"
         # self.solver.options['printingOptions'] = "normal"
@@ -69,7 +73,7 @@ class Planner:
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k1, t] + model.p[i1] <= model.gamma[i2, k2, t] + model.bigM[3] * (5 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (3 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
     @staticmethod
@@ -81,28 +85,28 @@ class Planner:
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        return model.gamma[i, k, t] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
+        return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
         if(i1 == i2):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] + model.p[i1] <= model.gamma[i2, k, t] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
     def simple_ordering_covid_precedence_rule(model, i1, i2, k, t):
         if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1)):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] * (1 - model.c[i1]) <= model.gamma[i2, k, t] - 1 + model.bigM[6] * (1 - model.c[i2])
+        return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] - 1 + model.bigM[6] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
 
     # Covid patients after non-Covid patients
     @staticmethod
     def start_time_ordering_covid_precedence_rule(model, i1, i2, k, t):
         if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1)):
             return pyo.Constraint.Skip
-        return model.gamma[i1, k, t] * (1 - model.c[i1]) <= model.gamma[i2, k, t] * model.c[i2] + model.bigM[2] * (1 - model.c[i2])
+        return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] * model.c[i2] + model.bigM[2] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
 
@@ -155,8 +159,6 @@ class Planner:
                                self.model.t,
                                domain=pyo.Binary)
         self.model.gamma = pyo.Var(self.model.i,
-                                   self.model.k,
-                                   self.model.t,
                                    domain=pyo.NonNegativeReals)
 
         self.model.p = pyo.Param(self.model.i)
@@ -300,7 +302,7 @@ class Planner:
                             for alpha in self.modelInstance.alpha:
                                 if(self.modelInstance.beta[alpha, i, k, t].value == 1):
                                     anesthetist = alpha
-                        order = self.modelInstance.gamma[i, k, t].value
+                        order = self.modelInstance.gamma[i].value
                         specialty = self.modelInstance.specialty[i]
                         priority = self.modelInstance.r[i]
                         patients.append(
