@@ -21,22 +21,21 @@ class Planner:
     def __init__(self, timeLimit, modelType, solver):
         self.model = pyo.AbstractModel()
         self.modelInstance = None
+        self.modelInstancePhaseTwo = None
         self.solver = pyo.SolverFactory(solver)
-        # CPLEX
-        self.solver.options['timelimit'] = timeLimit
-        # self.solver.options['mipgap'] = 0.5
-        # CBC
-        # self.solver.options['seconds'] = timeLimit
-        # self.solver.options['threads'] = 12
-        # self.solver.options['heuristics'] = "on"
-        # self.solver.options['round'] = "on"
-        # self.solver.options['feas'] = "on"
-        # self.solver.options['passF'] = 30
-        # self.solver.options['cuts'] = "off"
-        # self.solver.options['ratioGAP'] = 0.05
-        # self.solver.options['preprocess'] = "on"
-        # self.solver.options['printingOptions'] = "normal"
-
+        if(solver == "cplex"):
+            self.solver.options['timelimit'] = timeLimit
+        if(solver == "cbc"):
+            self.solver.options['seconds'] = timeLimit
+            # self.solver.options['threads'] = 10
+            # self.solver.options['heuristics'] = "off"
+            # self.solver.options['round'] = "on"
+            # self.solver.options['feas'] = "off"
+            # self.solver.options['passF'] = 250
+            # self.solver.options['cuts'] = "off"
+            # self.solver.options['ratioGAP'] = 0.05
+            # self.solver.options['preprocess'] = "on"
+            # self.solver.options['printingOptions'] = "normal"
         self.modelType = modelType
         self.define_model()
 
@@ -306,6 +305,9 @@ class Planner:
     def define_model(self):
         self.define_variables_and_params()
         self.define_constraints()
+        self.define_objective()
+
+    def define_objective(self):
         self.model.objective = pyo.Objective(
             rule=self.objective_function,
             sense=pyo.maximize)
@@ -323,7 +325,7 @@ class Planner:
             self.extend_model()
             self.create_model_instance_phase_two(data)
             self.fix_variables_from_phase_one()
-            self.drop_constraints()
+            # self.drop_constraints()
             print("Solving phase two model instance...")
             self.model.results = self.solver.solve(
                 self.modelInstancePhaseTwo, tee=True)

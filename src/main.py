@@ -12,7 +12,7 @@ if __name__ == '__main__':
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.2
-    dataDescriptor.anesthesiaFrequence = 1.0
+    dataDescriptor.anesthesiaFrequence = 0.2
     dataDescriptor.specialtyBalance = 0.3
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
