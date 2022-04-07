@@ -109,7 +109,7 @@ class Planner:
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
-    def define_variables_and_params(self):
+    def define_variables_and_params_phase_one(self):
         self.model.I = pyo.Param(within=pyo.NonNegativeIntegers)
         self.model.J = pyo.Param(within=pyo.NonNegativeIntegers)
         self.model.K = pyo.Param(within=pyo.NonNegativeIntegers)
@@ -201,7 +201,7 @@ class Planner:
             self.model.t,
             rule=self.exclusive_precedence_rule)
 
-    def define_constraints(self):
+    def define_constraints_phase_one(self):
         self.model.single_surgery_constraint = pyo.Constraint(
             self.model.i,
             rule=self.single_surgery_rule)
@@ -235,11 +235,11 @@ class Planner:
         self.create_model_instance(data)
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
-        print("Phase one model instance solved.")
+        print("\nPhase one model instance solved.")
         self.extend_model()
         self.create_model_instance_phase_two(data)
         self.fix_variables_from_phase_one()
-        self.drop_constraints()
+        # self.drop_constraints()
         print("Solving phase two model instance...")
         self.model.results = self.solver.solve(
             self.modelInstancePhaseTwo, tee=True)
@@ -273,11 +273,12 @@ class Planner:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
-                    for i2 in self.modelInstance.i:
-                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
-                            self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
-                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
-                            self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
+                        # self.modelInstancePhaseTwo.gamma[i1].fix(0)
+                    # for i2 in self.modelInstance.i:
+                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
+                    #         self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
+                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
+                    #         self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
         print("Variables fixed.")
 
     def drop_constraints(self):

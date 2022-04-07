@@ -1,5 +1,7 @@
 from __future__ import division
+from ast import Pass
 from enum import Enum
+import time
 import pyomo.environ as pyo
 import plotly.express as px
 import pandas as pd
@@ -10,7 +12,8 @@ from model import Patient
 
 class ModelType(Enum):
     START_TIME_ORDERING = 1
-    SIMPLE_ORDERING = 2
+    TWO_PHASE_START_TIME_ORDERING = 2
+    SIMPLE_ORDERING = 3
 
 
 class Planner:
@@ -137,6 +140,18 @@ class Planner:
         return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 480
 
     def define_variables_and_params(self):
+        self.define_common_variables_and_params()
+        if(self.modelType == ModelType.START_TIME_ORDERING):
+            self.define_STT_variables_and_params_phase_one()
+            self.define_STT_variables_and_params_phase_two()
+        elif(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            self.define_STT_variables_and_params_phase_one()
+        elif(self.modelType == ModelType.SIMPLE_ORDERING):
+            self.define_SO_variables_and_params()
+        else:
+            raise ValueError
+
+    def define_common_variables_and_params(self):
         self.model.I = pyo.Param(within=pyo.NonNegativeIntegers)
         self.model.J = pyo.Param(within=pyo.NonNegativeIntegers)
         self.model.K = pyo.Param(within=pyo.NonNegativeIntegers)
@@ -153,13 +168,6 @@ class Planner:
                                self.model.k,
                                self.model.t,
                                domain=pyo.Binary)
-        self.model.y = pyo.Var(self.model.i,
-                               self.model.i,
-                               self.model.k,
-                               self.model.t,
-                               domain=pyo.Binary)
-        self.model.gamma = pyo.Var(self.model.i,
-                                   domain=pyo.NonNegativeReals)
 
         self.model.p = pyo.Param(self.model.i)
         # self.model.m = pyo.Param(self.model.i)
@@ -173,26 +181,48 @@ class Planner:
         self.model.specialty = pyo.Param(self.model.i)
         self.model.bigM = pyo.Param(self.model.bm)
 
-        if(self.modelType == ModelType.START_TIME_ORDERING):
-            self.model.A = pyo.Param(within=pyo.NonNegativeIntegers)
-            self.model.alpha = pyo.RangeSet(1, self.model.A)
-            self.model.beta = pyo.Var(self.model.alpha,
-                                      self.model.i,
-                                      self.model.k,
-                                      self.model.t,
-                                      domain=pyo.Binary)
-            self.model.Lambda = pyo.Var(self.model.i,
-                                        self.model.i,
-                                        self.model.t,
-                                        domain=pyo.Binary)
-            # anesthetists' available time
-            self.model.An = pyo.Param(self.model.alpha, self.model.t)
+    def define_STT_variables_and_params_phase_one(self):
+        self.model.A = pyo.Param(within=pyo.NonNegativeIntegers)
+        self.model.alpha = pyo.RangeSet(1, self.model.A)
+        self.model.beta = pyo.Var(self.model.alpha,
+                                  self.model.i,
+                                  self.model.k,
+                                  self.model.t,
+                                  domain=pyo.Binary)
+        # anesthetists' available time
+        self.model.An = pyo.Param(self.model.alpha, self.model.t)
 
-        if(self.modelType == ModelType.SIMPLE_ORDERING):
-            self.model.rho = pyo.Param(self.model.i, self.model.j)
+    def define_STT_variables_and_params_phase_two(self):
+        self.model.Lambda = pyo.Var(self.model.i,
+                                    self.model.i,
+                                    self.model.t,
+                                    domain=pyo.Binary)
+        self.model.y = pyo.Var(self.model.i,
+                               self.model.i,
+                               self.model.k,
+                               self.model.t,
+                               domain=pyo.Binary)
+        self.model.gamma = pyo.Var(self.model.i,
+                                   domain=pyo.NonNegativeReals)
+
+    def define_SO_variables_and_params(self):
+        self.model.rho = pyo.Param(self.model.i, self.model.j)
+        self.model.gamma = pyo.Var(self.model.i,
+                                   domain=pyo.NonNegativeReals)
 
     def define_constraints(self):
-        # common constraints
+        self.define_common_constraints()
+        if(self.modelType == ModelType.START_TIME_ORDERING):
+            self.define_STT_constraints_phase_one()
+            self.define_STT_constraints_phase_two()
+        elif(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            self.define_STT_constraints_phase_one()
+        elif(self.modelType == ModelType.SIMPLE_ORDERING):
+            self.define_SO_constraints()
+        else:
+            raise ValueError
+
+    def define_common_constraints(self):
         self.model.single_surgery_constraint = pyo.Constraint(
             self.model.i,
             rule=self.single_surgery_rule)
@@ -206,105 +236,204 @@ class Planner:
             self.model.t,
             rule=self.specialty_assignment_rule)
 
-        if(self.modelType == ModelType.START_TIME_ORDERING):
-            self.model.anesthetist_assignment_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.anesthetist_assignment_rule)
-            self.model.anesthetist_time_constraint = pyo.Constraint(
-                self.model.alpha,
-                self.model.t,
-                rule=self.anesthetist_time_rule)
-            self.model.anesthetist_no_overlap_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.k,
-                self.model.t,
-                self.model.alpha,
-                rule=self.anesthetist_no_overlap_rule)
-            self.model.lambda_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.t,
-                rule=self.lambda_rule)
-            self.model.end_of_day_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.end_of_day_rule)
-            self.model.covid_precedence_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.start_time_ordering_covid_precedence_rule)
-            self.model.precedence_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.time_ordering_precedence_rule)
-            self.model.exclusive_precedence_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.exclusive_precedence_rule)
+    def define_STT_constraints_phase_one(self):
+        self.model.anesthetist_assignment_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.anesthetist_assignment_rule)
+        self.model.anesthetist_time_constraint = pyo.Constraint(
+            self.model.alpha,
+            self.model.t,
+            rule=self.anesthetist_time_rule)
 
-        if(self.modelType == ModelType.SIMPLE_ORDERING):
-            self.model.anesthesia_S1_constraint = pyo.Constraint(
-                self.model.i,
-                rule=self.anesthesia_S1_rule)
-            self.model.anesthesia_S3_constraint = pyo.Constraint(
-                self.model.i,
-                rule=self.anesthesia_S3_rule)
-            self.model.anesthesia_total_time_constraint = pyo.Constraint(
-                self.model.k,
-                self.model.t,
-                rule=self.anesthesia_total_time_rule)
-            self.model.covid_precedence_constraint = pyo.Constraint(
-                self.model.i,
-                self.model.i,
-                self.model.k,
-                self.model.t,
-                rule=self.simple_ordering_covid_precedence_rule)
+    def define_STT_constraints_phase_two(self):
+        self.model.anesthetist_no_overlap_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.k,
+            self.model.k,
+            self.model.t,
+            self.model.alpha,
+            rule=self.anesthetist_no_overlap_rule)
+        self.model.lambda_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.t,
+            rule=self.lambda_rule)
+        self.model.end_of_day_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.end_of_day_rule)
+        self.model.covid_precedence_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.start_time_ordering_covid_precedence_rule)
+        self.model.precedence_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.time_ordering_precedence_rule)
+        self.model.exclusive_precedence_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.exclusive_precedence_rule)
+
+    def define_SO_constraints(self):
+        self.model.anesthesia_S1_constraint = pyo.Constraint(
+            self.model.i,
+            rule=self.anesthesia_S1_rule)
+        self.model.anesthesia_S3_constraint = pyo.Constraint(
+            self.model.i,
+            rule=self.anesthesia_S3_rule)
+        self.model.anesthesia_total_time_constraint = pyo.Constraint(
+            self.model.k,
+            self.model.t,
+            rule=self.anesthesia_total_time_rule)
+        self.model.covid_precedence_constraint = pyo.Constraint(
+            self.model.i,
+            self.model.i,
+            self.model.k,
+            self.model.t,
+            rule=self.simple_ordering_covid_precedence_rule)
 
     def define_model(self):
-
         self.define_variables_and_params()
         self.define_constraints()
-
         self.model.objective = pyo.Objective(
             rule=self.objective_function,
             sense=pyo.maximize)
 
-    def solve_model(self):
+    def solve_modelzzz(self):
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print(self.model.results)
+
+    def solve_model(self, data):
+        self.create_model_instance(data)
+        print("Solving phase one model instance...")
+        self.model.results = self.solver.solve(self.modelInstance, tee=True)
+        print("\nPhase one model instance solved.")
+        if(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            self.extend_model()
+            self.create_model_instance_phase_two(data)
+            self.fix_variables_from_phase_one()
+            self.drop_constraints()
+            print("Solving phase two model instance...")
+            self.model.results = self.solver.solve(
+                self.modelInstancePhaseTwo, tee=True)
+            print("Phase two model instance solved.")
+        print(self.model.results)
+
+    def extend_model(self):
+        print("Extending model for phase two...")
+        self.define_STT_variables_and_params_phase_two()
+        self.define_STT_constraints_phase_two()
+        print("Model extended for phase two.")
+
+    def create_model_instance(self, data):
+        print("Creating model instance...")
+        self.modelInstance = self.model.create_instance(data)
+        print("Model instance created.")
+
+    def create_model_instance_phase_two(self, data):
+        print("Creating model instance for phase two...")
+        t = time.time()
+        self.modelInstancePhaseTwo = self.model.create_instance(data)
+        elapsed = (time.time() - t)
+        print("Model instance for phase two created in " +
+              str(round(elapsed, 2)) + "s")
+
+    def fix_variables_from_phase_one(self):
+        print("Fixing variables for phase two...")
+        for k in self.modelInstance.k:
+            for t in self.modelInstance.t:
+                for i1 in self.modelInstance.i:
+                    if(self.modelInstance.x[i1, k, t].value == 1):
+                        self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
+                    else:
+                        self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
+                        # self.modelInstancePhaseTwo.gamma[i1].fix(0)
+
+                    # droppabili solo se si droppano i rispettivi vincoli!
+                    # for i2 in self.modelInstance.i:
+                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
+                    #         self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
+                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
+                    #         self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
+        print("Variables fixed.")
+
+    def drop_constraints(self):
+        print("Dropping constraints...")
+        dropped = 0
+        for k1 in self.modelInstancePhaseTwo.k:
+            for t in self.modelInstancePhaseTwo.t:
+                for i1 in self.modelInstancePhaseTwo.i:
+                    if(self.modelInstancePhaseTwo.x[i1, k1, t].value < 1):
+                        self.modelInstancePhaseTwo.end_of_day_constraint[i1, k1, t].deactivate(
+                        )
+                        dropped += 1
+                    for i2 in self.modelInstancePhaseTwo.i:
+                        if(i1 != i2 and self.modelInstancePhaseTwo.c[i1] == 0 and self.modelInstancePhaseTwo.c[i2] == 1
+                                and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
+                            self.modelInstancePhaseTwo.covid_precedence_constraint[i1, i2, k1, t].deactivate(
+                            )
+                            dropped += 1
+                        if(i1 != i2 and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
+                            self.modelInstancePhaseTwo.precedence_constraint[i1, i2, k1, t].deactivate(
+                            )
+                            dropped += 1
+                        if(i1 < i2 and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
+                            self.modelInstancePhaseTwo.exclusive_precedence_constraint[i1, i2, k1, t].deactivate(
+                            )
+                            dropped += 1
+                        if(not(i1 >= i2) and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
+                            self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate(
+                            )
+                            dropped += 1
+                        for k2 in self.modelInstancePhaseTwo.k:
+                            for alpha in self.modelInstancePhaseTwo.alpha:
+                                if(not(i1 >= i2 or k1 == k2 or self.modelInstancePhaseTwo.a[i1] * self.modelInstancePhaseTwo.a[i2] == 0)
+                                   and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
+                                    self.modelInstancePhaseTwo.anesthetist_no_overlap_constraint[i1, i2, k1, k2, t, alpha].deactivate(
+                                    )
+                                    dropped += 1
+                        if(dropped > 0 and dropped % 10000 == 0):
+                            print("Dropped " + str(dropped) +
+                                  " constraints so far")
+        print("Dropped " + str(dropped) + " constraints in total")
 
     def create_model_instance(self, data):
         self.modelInstance = self.model.create_instance(data)
 
     def extract_solution(self):
         dict = {}
-        for k in self.modelInstance.k:
-            for t in self.modelInstance.t:
+        modelInstance = None
+        if(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            modelInstance = self.modelInstancePhaseTwo
+        else:
+            modelInstance = self.modelInstance
+        for k in modelInstance.k:
+            for t in modelInstance.t:
                 patients = []
-                for i in self.modelInstance.i:
+                for i in modelInstance.i:
                     if(self.modelInstance.x[i, k, t].value == 1):
-                        p = self.modelInstance.p[i]
-                        c = self.modelInstance.c[i]
-                        a = self.modelInstance.a[i]
+                        p = modelInstance.p[i]
+                        c = modelInstance.c[i]
+                        a = modelInstance.a[i]
                         anesthetist = 0
-                        if(self.modelType == ModelType.START_TIME_ORDERING and a == 1):
-                            for alpha in self.modelInstance.alpha:
-                                if(self.modelInstance.beta[alpha, i, k, t].value == 1):
+                        if((self.modelType == ModelType.START_TIME_ORDERING or self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING) and a == 1):
+                            for alpha in modelInstance.alpha:
+                                if(modelInstance.beta[alpha, i, k, t].value == 1):
                                     anesthetist = alpha
-                        order = self.modelInstance.gamma[i].value
-                        specialty = self.modelInstance.specialty[i]
-                        priority = self.modelInstance.r[i]
+                        order = modelInstance.gamma[i].value
+                        specialty = modelInstance.specialty[i]
+                        priority = modelInstance.r[i]
                         patients.append(
                             Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
@@ -313,36 +442,49 @@ class Planner:
 
     def print_solution(self):
         solution = self.extract_solution()
-        for t in self.modelInstance.t:
-            for k in self.modelInstance.k:
+        modelInstance = None
+        if(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            modelInstance = self.modelInstancePhaseTwo
+        else:
+            modelInstance = self.modelInstance
+        operatedPatients = 0
+        for t in modelInstance.t:
+            for k in modelInstance.k:
                 print("Day: " + str(t) + "; Operating Room: S" + str(k) + "\n")
                 for patient in solution[(k, t)]:
                     print(patient)
+                    operatedPatients += 1
                 print("\n")
+        print("Total number of operated patients: " + str(operatedPatients))
 
-    # only for minute ordering, for now. To be extended
     def plot_graph(self):
-        solution = self.extract_solution()
+        solutionPatients = self.extract_solution()
         dataFrames = []
         dff = pd.DataFrame([])
         for t in self.modelInstance.t:
             df = pd.DataFrame([])
             for k in self.modelInstance.k:
-                for patient in solution[(k, t)]:
+                patients = solutionPatients[(k, t)]
+                for idx in range(0, len(patients)):
+                    patient = patients[idx]
+                    if(self.modelType == ModelType.SIMPLE_ORDERING):
+                        if(idx == 0):
+                            patient.order = 0
+                        else:
+                            patient.order = patients[idx - 1].order + patients[idx - 1].operatingTime
                     start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=round(patient.order))
                     finish = start + datetime.timedelta(minutes=round(patient.operatingTime))
                     room = "S" + str(k)
                     covid = "Y" if patient.covid == 1 else "N"
                     anesthesia = "Y" if patient.anesthesia == 1 else "N"
-                    anesthetist = "A" + str(patient.anesthetist) if patient.anesthetist != 0 else ""
+                    anesthetist = "A" + \
+                        str(patient.anesthetist) if patient.anesthetist != 0 else ""
                     dfToAdd = pd.DataFrame(
                         [dict(Start=start, Finish=finish, Room=room, Covid=covid, Anesthesia=anesthesia, Anesthetist=anesthetist)])
                     df = pd.concat([df, dfToAdd])
             dataFrames.append(df)
             dff = pd.concat([df, dff])
 
-        # import plotly.graph_objects as go
-        # fig = go.Figure()
         fig = px.timeline(dff,
                           x_start="Start",
                           x_end="Finish",
@@ -358,7 +500,7 @@ class Planner:
                               "Anesthetist": "Anesthetist"
                           },
                           hover_data=["Anesthesia", "Anesthetist"]
-        )
+                          )
 
         fig.update_layout(xaxis=dict(
             title='Timetable', tickformat='%H:%M:%S',))
