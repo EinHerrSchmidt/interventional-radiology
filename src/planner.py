@@ -312,10 +312,6 @@ class Planner:
             rule=self.objective_function,
             sense=pyo.maximize)
 
-    def solve_modelzzz(self):
-        self.model.results = self.solver.solve(self.modelInstance, tee=True)
-        print(self.model.results)
-
     def solve_model(self, data):
         self.create_model_instance(data)
         print("Solving phase one model instance...")
