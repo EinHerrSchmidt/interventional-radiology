@@ -74,7 +74,7 @@ class Planner:
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-        or model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2):
+        or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (3 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.Lambda[i1, i2, t])
 
@@ -88,14 +88,14 @@ class Planner:
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        if(model.xParam == 1):
+        if(model.find_component('xParam') and model.xParam[i, k, t] == 1):
             return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
+        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
@@ -109,7 +109,7 @@ class Planner:
     # Covid patients after non-Covid patients
     @staticmethod
     def start_time_ordering_covid_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1) or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
+        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1) or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
             return pyo.Constraint.Skip
         return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] * model.c[i2] + model.bigM[2] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -117,7 +117,7 @@ class Planner:
 
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2 or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
+        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 

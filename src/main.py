@@ -5,10 +5,10 @@ if __name__ == '__main__':
 
     planner = Planner(timeLimit=900,
                       modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
-                      solver="cbc")
+                      solver="cplex")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 150
+    dataDescriptor.patients = 60
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.8
