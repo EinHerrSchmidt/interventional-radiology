@@ -5,13 +5,13 @@ if __name__ == '__main__':
 
     planner = Planner(timeLimit=900,
                       modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
-                      solver="cplex")
+                      solver="cbc")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 60
+    dataDescriptor.patients = 150
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
-    dataDescriptor.covidFrequence = 0.2
+    dataDescriptor.covidFrequence = 0.8
     dataDescriptor.anesthesiaFrequence = 0.2
     dataDescriptor.specialtyBalance = 0.3
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
@@ -32,9 +32,4 @@ if __name__ == '__main__':
     planner.solve_model(data)
     print("Possible solution, for each day and for each room:\n")
     planner.print_solution()
-    # sys.stdout.close()
-
-    # sys.stdout = sys.__stdout__
-    solution = planner.extract_solution()
-    
     planner.plot_graph()

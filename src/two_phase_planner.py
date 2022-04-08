@@ -225,8 +225,8 @@ class Planner:
             rule=self.anesthetist_time_rule)
 
     def define_model(self):
-        self.define_variables_and_params()
-        self.define_constraints()
+        self.define_variables_and_params_phase_one()
+        self.define_constraints_phase_one()
         self.model.objective = pyo.Objective(
             rule=self.objective_function,
             sense=pyo.maximize)
@@ -239,7 +239,7 @@ class Planner:
         self.extend_model()
         self.create_model_instance_phase_two(data)
         self.fix_variables_from_phase_one()
-        # self.drop_constraints()
+        self.drop_constraints()
         print("Solving phase two model instance...")
         self.model.results = self.solver.solve(
             self.modelInstancePhaseTwo, tee=True)
@@ -273,12 +273,13 @@ class Planner:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
-                        # self.modelInstancePhaseTwo.gamma[i1].fix(0)
-                    # for i2 in self.modelInstance.i:
-                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
-                    #         self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
-                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
-                    #         self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
+                        self.modelInstancePhaseTwo.gamma[i1].fix(0)
+                    for i2 in self.modelInstance.i:
+                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
+                            self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
+                        # can be dropped only if drop_constraints() is then called!!!
+                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
+                            self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
         print("Variables fixed.")
 
     def drop_constraints(self):

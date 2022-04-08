@@ -27,11 +27,11 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            # self.solver.options['threads'] = 10
-            # self.solver.options['heuristics'] = "off"
+            # self.solver.options['threads'] = 6
+            # self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
-            # self.solver.options['feas'] = "off"
-            # self.solver.options['passF'] = 250
+            # self.solver.options['feas'] = "both"
+            # self.solver.options['passF'] = 180
             # self.solver.options['cuts'] = "off"
             # self.solver.options['ratioGAP'] = 0.05
             # self.solver.options['preprocess'] = "on"
@@ -73,7 +73,8 @@ class Planner:
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
+        or model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (3 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.Lambda[i1, i2, t])
 
@@ -87,12 +88,14 @@ class Planner:
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
+        if(model.xParam == 1):
+            return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2):
+        if(i1 == i2 or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
@@ -106,7 +109,7 @@ class Planner:
     # Covid patients after non-Covid patients
     @staticmethod
     def start_time_ordering_covid_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1)):
+        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1) or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] * model.c[i2] + model.bigM[2] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -114,7 +117,7 @@ class Planner:
 
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2):
+        if(i1 >= i2 or model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
@@ -203,6 +206,9 @@ class Planner:
                                domain=pyo.Binary)
         self.model.gamma = pyo.Var(self.model.i,
                                    domain=pyo.NonNegativeReals)
+        self.model.xParam = pyo.Param(self.model.i,
+                               self.model.k,
+                               self.model.t)
 
     def define_SO_variables_and_params(self):
         self.model.rho = pyo.Param(self.model.i, self.model.j)
@@ -319,9 +325,10 @@ class Planner:
         print("\nPhase one model instance solved.")
         if(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
             self.extend_model()
+            self.extend_data(data)
             self.create_model_instance_phase_two(data)
             self.fix_variables_from_phase_one()
-            # self.drop_constraints()
+            self.drop_constraints()
             print("Solving phase two model instance...")
             self.model.results = self.solver.solve(
                 self.modelInstancePhaseTwo, tee=True)
@@ -333,6 +340,17 @@ class Planner:
         self.define_STT_variables_and_params_phase_two()
         self.define_STT_constraints_phase_two()
         print("Model extended for phase two.")
+
+    def extend_data(self, data):
+        dict = {}
+        for i in range(1, self.modelInstance.I + 1):
+            for k in range(1, self.modelInstance.K + 1):
+                for t in range(1, self.modelInstance.T + 1):
+                    if(self.modelInstance.x[i, k, t].value == 1):
+                        dict[(i, k, t)] = 1
+                    else:
+                        dict[(i, k, t)] = 0
+        data[None]['xParam'] = dict
 
     def create_model_instance(self, data):
         print("Creating model instance...")
@@ -359,11 +377,11 @@ class Planner:
                         # self.modelInstancePhaseTwo.gamma[i1].fix(0)
 
                     # droppabili solo se si droppano i rispettivi vincoli!
-                    # for i2 in self.modelInstance.i:
-                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
-                    #         self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
-                    #     if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
-                    #         self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
+                    for i2 in self.modelInstance.i:
+                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
+                            self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
+                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
+                            self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
         print("Variables fixed.")
 
     def drop_constraints(self):
@@ -372,35 +390,10 @@ class Planner:
         for k1 in self.modelInstancePhaseTwo.k:
             for t in self.modelInstancePhaseTwo.t:
                 for i1 in self.modelInstancePhaseTwo.i:
-                    if(self.modelInstancePhaseTwo.x[i1, k1, t].value < 1):
-                        self.modelInstancePhaseTwo.end_of_day_constraint[i1, k1, t].deactivate(
-                        )
-                        dropped += 1
                     for i2 in self.modelInstancePhaseTwo.i:
-                        if(i1 != i2 and self.modelInstancePhaseTwo.c[i1] == 0 and self.modelInstancePhaseTwo.c[i2] == 1
-                                and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
-                            self.modelInstancePhaseTwo.covid_precedence_constraint[i1, i2, k1, t].deactivate(
-                            )
-                            dropped += 1
-                        if(i1 != i2 and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
-                            self.modelInstancePhaseTwo.precedence_constraint[i1, i2, k1, t].deactivate(
-                            )
-                            dropped += 1
-                        if(i1 < i2 and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value < 2):
-                            self.modelInstancePhaseTwo.exclusive_precedence_constraint[i1, i2, k1, t].deactivate(
-                            )
-                            dropped += 1
                         if(not(i1 >= i2) and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
-                            self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate(
-                            )
+                            self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate()
                             dropped += 1
-                        for k2 in self.modelInstancePhaseTwo.k:
-                            for alpha in self.modelInstancePhaseTwo.alpha:
-                                if(not(i1 >= i2 or k1 == k2 or self.modelInstancePhaseTwo.a[i1] * self.modelInstancePhaseTwo.a[i2] == 0)
-                                   and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
-                                    self.modelInstancePhaseTwo.anesthetist_no_overlap_constraint[i1, i2, k1, k2, t, alpha].deactivate(
-                                    )
-                                    dropped += 1
                         if(dropped > 0 and dropped % 10000 == 0):
                             print("Dropped " + str(dropped) +
                                   " constraints so far")
