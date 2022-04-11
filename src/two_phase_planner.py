@@ -273,7 +273,7 @@ class Planner:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
-                        self.modelInstancePhaseTwo.gamma[i1].fix(0)
+                        # self.modelInstancePhaseTwo.gamma[i1].fix(0)
                     for i2 in self.modelInstance.i:
                         if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
                             self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
