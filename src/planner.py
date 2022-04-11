@@ -88,7 +88,7 @@ class Planner:
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        if(model.find_component('xParam') and model.xParam[i, k, t] == 1):
+        if(model.find_component('xParam') and model.xParam[i, k, t] == 0):
             return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
