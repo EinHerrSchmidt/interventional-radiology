@@ -5,15 +5,17 @@ if __name__ == '__main__':
 
     planner = Planner(timeLimit=900,
                       modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
-                      solver="cbc")
+                      solver="cplex")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 150
+    dataDescriptor.patients = 60
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 0.2
+    dataDescriptor.anesthesiaFrequence = 1.0
     dataDescriptor.specialtyBalance = 0.17
+    dataDescriptor.operatingDayDuration = 480
+    dataDescriptor.anesthesiaTime = 480
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
                                                                          mean=60,
