@@ -28,6 +28,8 @@ class DataDescriptor:
         self._covidFrequence = None
         self._anesthesiaFrequence = None
         self._specialtyBalance = None
+        self._operatingDayDuration = None
+        self._anesthesiaTime = None
         self._operatingTimeDistribution = None
         self._priorityDistribution = None
 
@@ -94,6 +96,24 @@ class DataDescriptor:
     @specialtyBalance.setter
     def specialtyBalance(self, value):
         self._specialtyBalance = value
+
+    @property
+    def operatingDayDuration(self):
+        """Get operating day duration."""
+        return self._operatingDayDuration
+
+    @operatingDayDuration.setter
+    def operatingDayDuration(self, value):
+        self._operatingDayDuration = value
+
+    @property
+    def anesthesiaTime(self):
+        """Get anesthesia time at disposal for each anesthetist."""
+        return self._anesthesiaTime
+
+    @anesthesiaTime.setter
+    def anesthesiaTime(self, value):
+        self._anesthesiaTime = value
 
     @property
     def operatingTimeDistribution(self):
@@ -164,18 +184,18 @@ class DataMaker:
                 dict[(i + 1)] = int(sample[i])
         return dict
 
-    def create_room_timetable(self, K, T):
+    def create_room_timetable(self, K, T, operatingDayDuration):
         dict = {}
         for k in range(0, K):
             for t in range(0, T):
-                dict[(k + 1, t + 1)] = 480
+                dict[(k + 1, t + 1)] = operatingDayDuration
         return dict
 
-    def create_anestethists_timetable(self, A, T):
+    def create_anestethists_timetable(self, A, T, anesthesiaTime):
         dict = {}
         for a in range(0, A):
             for t in range(0, T):
-                dict[(a + 1, t + 1)] = 480
+                dict[(a + 1, t + 1)] = anesthesiaTime
         return dict
 
     def create_patient_specialty_table(self, I, J, specialtyLabels):
@@ -202,9 +222,11 @@ class DataMaker:
     def generate_data(self, dataDescriptor: DataDescriptor, seed):
         np.random.seed(seed=seed)
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms,
-                                                        dataDescriptor.days)
+                                                        dataDescriptor.days,
+                                                        dataDescriptor.operatingDayDuration)
         anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists,
-                                                               dataDescriptor.days)
+                                                               dataDescriptor.days,
+                                                               dataDescriptor.anesthesiaTime)
         operatingTimes = self.generate_truncnorm_sample(dataDescriptor.patients,
                                                         dataDescriptor.operatingTimeDistribution.low,
                                                         dataDescriptor.operatingTimeDistribution.high,
