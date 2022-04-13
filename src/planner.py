@@ -1,5 +1,4 @@
 from __future__ import division
-from ast import Pass
 from enum import Enum
 import time
 import pyomo.environ as pyo
@@ -60,23 +59,24 @@ class Planner:
 
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
-    def anesthetist_assignment_rule(model, i, k, t):
-        return sum(model.beta[alpha, i, k, t]
-                   for alpha in model.alpha) == model.a[i]*model.x[i, k, t]
+    def anesthetist_assignment_rule(model, i, t):
+        return sum(model.beta[alpha, i, t]
+                   for alpha in model.alpha) == model.a[i]* sum(model.x[i, k, t] for k in model.k)
 
     # do not exceed anesthetist time in each day
     @staticmethod
     def anesthetist_time_rule(model, alpha, t):
-        return sum(model.beta[alpha, i, k, t] * model.p[i]
-                   for i in model.i for k in model.k) <= model.An[alpha, t]
+        return sum(model.beta[alpha, i, t] * model.p[i]
+                   for i in model.i) <= model.An[alpha, t]
 
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-        or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)):
+        or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)
+        or (model.find_component('xParam') and model.xParam[i1, k2, t] + model.xParam[i2, k2, t] == 2)):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (3 - model.beta[alpha, i1, k1, t] - model.beta[alpha, i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
     @staticmethod
@@ -122,7 +122,6 @@ class Planner:
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     # if patient i has specialty 1 and needs anesthesia, then he cannot be in room 2
-
     @staticmethod
     def anesthesia_S1_rule(model, i):
         if(model.a[i] * model.rho[i, 1] == 0):
@@ -188,7 +187,6 @@ class Planner:
         self.model.alpha = pyo.RangeSet(1, self.model.A)
         self.model.beta = pyo.Var(self.model.alpha,
                                   self.model.i,
-                                  self.model.k,
                                   self.model.t,
                                   domain=pyo.Binary)
         # anesthetists' available time
@@ -244,7 +242,6 @@ class Planner:
     def define_STT_constraints_phase_one(self):
         self.model.anesthetist_assignment_constraint = pyo.Constraint(
             self.model.i,
-            self.model.k,
             self.model.t,
             rule=self.anesthetist_assignment_rule)
         self.model.anesthetist_time_constraint = pyo.Constraint(
@@ -420,13 +417,13 @@ class Planner:
                         anesthetist = 0
                         if((self.modelType == ModelType.START_TIME_ORDERING or self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING) and a == 1):
                             for alpha in modelInstance.alpha:
-                                if(modelInstance.beta[alpha, i, k, t].value == 1):
+                                if(modelInstance.beta[alpha, i, t].value == 1):
                                     anesthetist = alpha
                         order = modelInstance.gamma[i].value
                         specialty = modelInstance.specialty[i]
                         priority = modelInstance.r[i]
                         patients.append(
-                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
+                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, round(order)))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
