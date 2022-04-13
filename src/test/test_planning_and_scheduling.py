@@ -123,5 +123,16 @@ class TestPlannerOutput(unittest.TestCase):
         patientIds = list(map(lambda p : p.id, patients))
         self.assertTrue(len(patientIds) == len(set(patientIds)))
 
+    def test_anesthetist_assignment(self):
+        K = self.dataDescriptor.operatingRooms
+        T = self.dataDescriptor.days
+        for k in range(1, K + 1):
+            for t in range(1, T + 1):
+                for patient in self.solution[(k, t)]:
+                    if(patient.anesthesia == 1):
+                        self.assertTrue(patient.anesthetist > 0)
+                    else:
+                        self.assertTrue(patient.anesthetist == 0)
+
 if __name__ == '__main__':
     unittest.main()
