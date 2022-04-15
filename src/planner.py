@@ -81,7 +81,7 @@ class Planner:
     # precedence across rooms, same day
     @staticmethod
     def lambda_rule(model, i1, i2, t):
-        if(i1 >= i2):
+        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
@@ -114,7 +114,6 @@ class Planner:
         return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] * model.c[i2] + model.bigM[2] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
-
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
         if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
@@ -317,6 +316,7 @@ class Planner:
 
     def solve_model(self, data):
         self.create_model_instance(data)
+        self.fix_variables_on_startup()
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nPhase one model instance solved.")
@@ -362,6 +362,18 @@ class Planner:
         print("Model instance for phase two created in " +
               str(round(elapsed, 2)) + "s")
 
+    # only for start time ordering
+    def fix_variables_on_startup(self):
+        print("Fixing variables on startup...")
+        for k in self.modelInstance.k:
+            for t in self.modelInstance.t:
+                for i1 in self.modelInstance.i:
+                    for i2 in self.modelInstance.i:
+                        if(i1 != i2 and self.modelInstance.c[i1] == 1 and self.modelInstance.c[i2] == 0):
+                            self.modelInstance.y[i1, i2, k, t].fix(0)
+                            self.modelInstance.y[i2, i1, k, t].fix(1)
+        print("Variables fixed.")
+
     def fix_variables_from_phase_one(self):
         print("Fixing variables for phase two...")
         for k in self.modelInstance.k:
@@ -392,8 +404,7 @@ class Planner:
                             self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate()
                             dropped += 1
                         if(dropped > 0 and dropped % 10000 == 0):
-                            print("Dropped " + str(dropped) +
-                                  " constraints so far")
+                            print("Dropped " + str(dropped) + " constraints so far")
         print("Dropped " + str(dropped) + " constraints in total")
 
     def create_model_instance(self, data):
