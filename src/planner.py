@@ -99,19 +99,17 @@ class Planner:
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
-    # Covid patients after non-Covid patients
     @staticmethod
-    def simple_ordering_covid_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1)):
+    def simple_ordering_priority_rule(model, i1, i2, k, t):
+        if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0)):
             return pyo.Constraint.Skip
-        return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] - 1 + model.bigM[6] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
+        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) - 1 + model.bigM[6] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
-    # Covid patients after non-Covid patients
     @staticmethod
-    def start_time_ordering_covid_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or not (model.c[i1] == 0 and model.c[i2] == 1) or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+    def start_time_ordering_priority_rule(model, i1, i2, k, t):
+        if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0) or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
             return pyo.Constraint.Skip
-        return model.gamma[i1] * (1 - model.c[i1]) <= model.gamma[i2] * model.c[i2] + model.bigM[2] * (3 - model.c[i2] - model.x[i1, k, t] - model.x[i2, k, t])
+        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
@@ -177,6 +175,7 @@ class Planner:
         self.model.s = pyo.Param(self.model.k, self.model.t)
         self.model.a = pyo.Param(self.model.i)
         self.model.c = pyo.Param(self.model.i)
+        self.model.u = pyo.Param(self.model.i, self.model.i)
         self.model.tau = pyo.Param(self.model.j, self.model.k, self.model.t)
         self.model.specialty = pyo.Param(self.model.i)
         self.model.bigM = pyo.Param(self.model.bm)
@@ -267,12 +266,12 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.end_of_day_rule)
-        self.model.covid_precedence_constraint = pyo.Constraint(
+        self.model.priority_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
             self.model.k,
             self.model.t,
-            rule=self.start_time_ordering_covid_precedence_rule)
+            rule=self.start_time_ordering_priority_rule)
         self.model.precedence_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
@@ -297,12 +296,12 @@ class Planner:
             self.model.k,
             self.model.t,
             rule=self.anesthesia_total_time_rule)
-        self.model.covid_precedence_constraint = pyo.Constraint(
+        self.model.priority_constraint = pyo.Constraint(
             self.model.i,
             self.model.i,
             self.model.k,
             self.model.t,
-            rule=self.simple_ordering_covid_precedence_rule)
+            rule=self.simple_ordering_priority_rule)
 
     def define_model(self):
         self.define_variables_and_params()
@@ -316,7 +315,8 @@ class Planner:
 
     def solve_model(self, data):
         self.create_model_instance(data)
-        self.fix_variables_on_startup()
+        if(self.modelType == ModelType.START_TIME_ORDERING):
+            self.fix_variables_on_startup()
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nPhase one model instance solved.")
@@ -384,6 +384,11 @@ class Planner:
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
                         # self.modelInstancePhaseTwo.gamma[i1].fix(0)
+                    # for a in self.modelInstance.alpha:
+                    #     if(self.modelInstance.beta[a, i1, t].value == 1):
+                    #         self.modelInstancePhaseTwo.beta[a, i1, t].fix(1)
+                    #     else:
+                    #         self.modelInstancePhaseTwo.beta[a, i1, t].fix(0)
 
                     # droppabili solo se si droppano i rispettivi vincoli!
                     for i2 in self.modelInstance.i:
@@ -400,7 +405,7 @@ class Planner:
             for t in self.modelInstancePhaseTwo.t:
                 for i1 in self.modelInstancePhaseTwo.i:
                     for i2 in self.modelInstancePhaseTwo.i:
-                        if(not(i1 >= i2) and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
+                        if(self.modelInstancePhaseTwo.a[i1] == 1 and self.modelInstancePhaseTwo.a[i2] == 1 and not(i1 >= i2) and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
                             self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate()
                             dropped += 1
                         if(dropped > 0 and dropped % 10000 == 0):
