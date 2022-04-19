@@ -6,7 +6,7 @@ from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 from planner import ModelType, Planner
 
 
-class TestPlannerOutput(unittest.TestCase):
+class TestTwoPhase(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
