@@ -216,6 +216,23 @@ class DataMaker:
                         dict[(j + 1, k + 1, t + 1)] = 0
         return dict
 
+    # only for Covid now, but can be extended
+    def create_precedence(self, covidFlags):
+        dict = {}
+        for i1 in range(1, len(covidFlags) + 1):
+            for i2 in range(1, len(covidFlags) + 1):
+                dict[(i1, i2)] = 0
+                dict[(i2, i1)] = 0
+                if(i1 == i2):
+                    continue
+                if(covidFlags[i1 - 1] == 0 and covidFlags[i2 - 1] == 1):
+                    dict[(i1, i2)] = 1
+                    continue
+                if(covidFlags[i2 - 1] == 0 and covidFlags[i1 - 1] == 1):
+                    dict[(i2, i1)] = 1
+                    continue
+        return dict
+                
     def generate_data(self, dataDescriptor: DataDescriptor, seed):
         np.random.seed(seed=seed)
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms,
@@ -261,6 +278,7 @@ class DataMaker:
                 'r': self.create_dictionary_entry(priorities, isTime=False),
                 'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
                 'c': self.create_dictionary_entry(covidFlags, isTime=False),
+                'u': self.create_precedence(covidFlags),
                 'specialty': specialtyLabels,
                 'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, specialtyLabels),
                 'bigM': {
