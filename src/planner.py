@@ -17,6 +17,9 @@ class ModelType(Enum):
 
 class Planner:
 
+    totalConstraints = 0
+    skippedConstraints = 0
+
     def __init__(self, timeLimit, modelType, solver):
         self.model = pyo.AbstractModel()
         self.modelInstance = None
@@ -45,27 +48,32 @@ class Planner:
     # one surgery per patient, at most
     @staticmethod
     def single_surgery_rule(model, i):
+        Planner.totalConstraints += 1
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
     # estimated surgery times cannot exceed operating room/surgical team time availability
     @staticmethod
     def surgery_time_rule(model, k, t):
+        Planner.totalConstraints += 1
         return sum(model.p[i] * model.x[i, k, t] for i in model.i) <= model.s[k, t]
 
     # each patient must be assigned to a room matching her specialty need
     @staticmethod
     def specialty_assignment_rule(model, j, k, t):
+        Planner.totalConstraints += 1
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
+        Planner.totalConstraints += 1
         return sum(model.beta[alpha, i, t]
                    for alpha in model.alpha) == model.a[i]* sum(model.x[i, k, t] for k in model.k)
 
     # do not exceed anesthetist time in each day
     @staticmethod
     def anesthetist_time_rule(model, alpha, t):
+        Planner.totalConstraints += 1
         return sum(model.beta[alpha, i, t] * model.p[i]
                    for i in model.i) <= model.An[alpha, t]
 
@@ -75,66 +83,85 @@ class Planner:
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
         or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)
         or (model.find_component('xParam') and model.xParam[i1, k2, t] + model.xParam[i2, k2, t] == 2)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1,k1,t] - model.x[i2,k2,t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
     @staticmethod
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
         if(model.find_component('xParam') and model.xParam[i, k, t] == 0):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
         if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def simple_ordering_priority_rule(model, i1, i2, k, t):
         if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) - 1 + model.bigM[6] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
         if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0) or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
         if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     # if patient i has specialty 1 and needs anesthesia, then he cannot be in room 2
     @staticmethod
     def anesthesia_S1_rule(model, i):
         if(model.a[i] * model.rho[i, 1] == 0):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return sum(model.x[i, 2, t] * model.a[i] for t in model.t) <= 1 - model.rho[i, 1]
 
     # if patient i has specialty 2 and needs anesthesia, then he cannot be in room 4
     @staticmethod
     def anesthesia_S3_rule(model, i):
         if(model.a[i] * model.rho[i, 2] == 0):
+            Planner.skippedConstraints += 1
             return pyo.Constraint.Skip
+        Planner.totalConstraints += 1
         return sum(model.x[i, 4, t] * model.a[i] for t in model.t) <= 1 - model.rho[i, 2]
 
     # patients needing anesthesia cannot exceed anesthesia total time in each room
     @staticmethod
     def anesthesia_total_time_rule(model, k, t):
+        Planner.totalConstraints += 1
         return sum(model.x[i, k, t] * model.p[i] * model.a[i] for i in model.i) <= 480
 
     def define_variables_and_params(self):
@@ -314,23 +341,33 @@ class Planner:
             sense=pyo.maximize)
 
     def solve_model(self, data):
+        Planner.totalConstraints = 0
+        Planner.skippedConstraints = 0
         self.create_model_instance(data)
+        self.printConstraintsNumber()
         if(self.modelType == ModelType.START_TIME_ORDERING):
             self.fix_variables_on_startup()
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nPhase one model instance solved.")
         if(self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING):
+            Planner.totalConstraints = 0
+            Planner.skippedConstraints = 0
             self.extend_model()
             self.extend_data(data)
             self.create_model_instance_phase_two(data)
             self.fix_variables_from_phase_one()
+            self.printConstraintsNumber()
             self.drop_constraints()
             print("Solving phase two model instance...")
             self.model.results = self.solver.solve(
                 self.modelInstancePhaseTwo, tee=True)
             print("Phase two model instance solved.")
         print(self.model.results)
+
+    def printConstraintsNumber(self):
+        print("Total active constraints: " + str(Planner.totalConstraints))
+        print("Skipped constraints: " + str(Planner.skippedConstraints))
 
     def extend_model(self):
         print("Extending model for phase two...")
@@ -365,17 +402,20 @@ class Planner:
     # only for start time ordering
     def fix_variables_on_startup(self):
         print("Fixing variables on startup...")
+        fixed = 0
         for k in self.modelInstance.k:
             for t in self.modelInstance.t:
                 for i1 in self.modelInstance.i:
                     for i2 in self.modelInstance.i:
-                        if(i1 != i2 and self.modelInstance.c[i1] == 1 and self.modelInstance.c[i2] == 0):
-                            self.modelInstance.y[i1, i2, k, t].fix(0)
-                            self.modelInstance.y[i2, i1, k, t].fix(1)
-        print("Variables fixed.")
+                        if(i1 != i2 and self.modelInstance.u[i1, i2] == 1):
+                            self.modelInstance.y[i1, i2, k, t].fix(1)
+                            self.modelInstance.y[i2, i1, k, t].fix(0)
+                            fixed += 2
+        print(str(fixed) + " variables fixed.")
 
     def fix_variables_from_phase_one(self):
         print("Fixing variables for phase two...")
+        fixed = 0
         for k in self.modelInstance.k:
             for t in self.modelInstance.t:
                 for i1 in self.modelInstance.i:
@@ -384,19 +424,17 @@ class Planner:
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
                         # self.modelInstancePhaseTwo.gamma[i1].fix(0)
-                    # for a in self.modelInstance.alpha:
-                    #     if(self.modelInstance.beta[a, i1, t].value == 1):
-                    #         self.modelInstancePhaseTwo.beta[a, i1, t].fix(1)
-                    #     else:
-                    #         self.modelInstancePhaseTwo.beta[a, i1, t].fix(0)
+                    fixed += 1
 
                     # droppabili solo se si droppano i rispettivi vincoli!
                     for i2 in self.modelInstance.i:
                         if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
                             self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
+                            fixed += 1
                         if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
                             self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
-        print("Variables fixed.")
+                            fixed += 1
+        print(str(fixed) + " variables fixed.")
 
     def drop_constraints(self):
         print("Dropping constraints...")
