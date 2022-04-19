@@ -3,19 +3,19 @@ from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 
 if __name__ == '__main__':
 
-    planner = Planner(timeLimit=900,
+    planner = Planner(timeLimit=1800,
                       modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
                       solver="cplex")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 60
+    dataDescriptor.patients = 150
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 0.2
+    dataDescriptor.anesthesiaFrequence = 1.0
     dataDescriptor.specialtyBalance = 0.17
-    dataDescriptor.operatingDayDuration = 480
-    dataDescriptor.anesthesiaTime = 480
+    dataDescriptor.operatingDayDuration = 240
+    dataDescriptor.anesthesiaTime = 240
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
                                                                          mean=60,
