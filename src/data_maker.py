@@ -154,10 +154,34 @@ Distributions for operating times and priorities are Truncated Normal Distributi
 \t\tMean:{self.priorityDistribution.mean:19}\n\
 \t\tStandard deviation:{self.priorityDistribution.stdDev:5}'
 
+class DataContainer:
+    def __init__(self, operatingRoomTimes, anesthetistsTimes, operatingTimes, priorities, anesthesiaFlags, covidFlags, specialties):
+        self.operatingRoomTimes = operatingRoomTimes
+        self.anesthetistsTimes = anesthetistsTimes
+        self.operatingTimes = self.sample_list_to_dict(operatingTimes)
+        self.priorities = self.sample_list_to_dict(priorities)
+        self.anesthesiaFlags = self.sample_list_to_dict(anesthesiaFlags)
+        self.covidFlags = self.sample_list_to_dict(covidFlags)
+        self.specialties = self.sample_list_to_dict(specialties)
+        self.ids = self.sample_list_to_dict([i for i in range(1, len(operatingTimes) + 1)])
+
+    def asList(self, sampleDictionary):
+        sampleAsList = []
+        for key, value in sampleDictionary.items():
+            sampleAsList.append(value)
+        return sampleAsList
+
+    def sample_list_to_dict(self, sample):
+        dict = {}
+        idx = 1
+        for s in sample:
+            dict[(str(idx))] = s
+            idx += 1
+        return dict
 
 class DataMaker:
-    def __init__(self):
-        pass
+    def __init__(self, seed):
+        np.random.seed(seed=seed)
 
     def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev):
         a = (lower - mean) / stdDev
@@ -232,9 +256,12 @@ class DataMaker:
                     dict[(i2, i1)] = 1
                     continue
         return dict
-                
-    def generate_data(self, dataDescriptor: DataDescriptor, seed):
-        np.random.seed(seed=seed)
+
+    def generate_data(self, dataDescriptor: DataDescriptor):
+        dataContainer = self.create_data_container(dataDescriptor)
+        return self.create_data_dictionary(dataContainer, dataDescriptor)
+        
+    def create_data_container(self, dataDescriptor: DataDescriptor) -> DataContainer:
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms,
                                                         dataDescriptor.days,
                                                         dataDescriptor.operatingDayDuration)
@@ -260,8 +287,17 @@ class DataMaker:
         specialties = self.generate_binomial_sample(dataDescriptor.patients,
                                                     dataDescriptor.specialtyBalance,
                                                     isSpecialty=True)
-        specialtyLabels = self.create_dictionary_entry(specialties,
-                                                       isTime=False)
+        return DataContainer(operatingRoomTimes, anesthetistsTimes, operatingTimes, priorities, anesthesiaFlags, covidFlags, specialties)
+
+    def create_data_dictionary(self, dataContainer: DataContainer, dataDescriptor: DataDescriptor):
+        operatingRoomTimes = dataContainer.operatingRoomTimes
+        anesthetistsTimes = dataContainer.anesthetistsTimes
+        operatingTimes = dataContainer.asList(dataContainer.operatingTimes)
+        priorities = dataContainer.asList(dataContainer.priorities)
+        anesthesiaFlags = dataContainer.asList(dataContainer.anesthesiaFlags)
+        covidFlags = dataContainer.asList(dataContainer.covidFlags)
+        specialties = dataContainer.asList(dataContainer.specialties)
+        ids = dataContainer.asList(dataContainer.ids)
         totalOperatingTime = sum(operatingTimes)
         return {
             None: {
@@ -279,8 +315,9 @@ class DataMaker:
                 'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
                 'c': self.create_dictionary_entry(covidFlags, isTime=False),
                 'u': self.create_precedence(covidFlags),
-                'specialty': specialtyLabels,
-                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, specialtyLabels),
+                'patientId': self.create_dictionary_entry(ids, isTime=False),
+                'specialty': self.create_dictionary_entry(specialties, isTime=False),
+                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, self.create_dictionary_entry(specialties, isTime=False)),
                 'bigM': {
                     1: dataDescriptor.patients,
                     2: totalOperatingTime,
@@ -290,7 +327,7 @@ class DataMaker:
                     6: dataDescriptor.patients
                 }
             }
-        }
+        }   
 
     def print_data(self, data):
         patientNumber = data[None]['I'][None]
