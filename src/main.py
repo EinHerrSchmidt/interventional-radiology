@@ -3,7 +3,7 @@ from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 
 if __name__ == '__main__':
 
-    planner = Planner(timeLimit=1800,
+    planner = Planner(timeLimit=900,
                       modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
                       solver="cplex")
 
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 1.0
+    dataDescriptor.anesthesiaFrequence = 0.0
     dataDescriptor.specialtyBalance = 0.17
     dataDescriptor.operatingDayDuration = 240
     dataDescriptor.anesthesiaTime = 240
@@ -24,14 +24,15 @@ if __name__ == '__main__':
                                                                     high=120,
                                                                     mean=60,
                                                                     stdDev=10)
-    dataMaker = DataMaker()
-    data = dataMaker.generate_data(dataDescriptor, seed=52876)
+    dataMaker = DataMaker(seed=52876)
+    dataContainer = dataMaker.create_data_container(dataDescriptor)
+    dataDictionary = dataMaker.create_data_dictionary(dataContainer, dataDescriptor)
 
     print("Data description:\n")
     print(dataDescriptor)
     print("\nPatients to be operated:\n")
-    dataMaker.print_data(data)
-    planner.solve_model(data)
+    dataMaker.print_data(dataDictionary)
+    planner.solve_model(dataDictionary)
     print("Possible solution, for each day and for each room:\n")
     planner.print_solution()
     planner.plot_graph()
