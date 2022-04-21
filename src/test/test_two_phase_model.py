@@ -3,15 +3,14 @@ import unittest
 from numpy import size
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 
-from planner import ModelType, Planner
+from planners import TwoPhaseStartingMinutePlanner
 
 
 class TestTwoPhase(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        planner = Planner(timeLimit=900,
-                               modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
+        planner = TwoPhaseStartingMinutePlanner(timeLimit=900,
                                solver="cplex")
 
         self.dataDescriptor = DataDescriptor()
@@ -31,9 +30,11 @@ class TestTwoPhase(unittest.TestCase):
                                                                              high=120,
                                                                              mean=60,
                                                                              stdDev=10)
-        dataMaker = DataMaker()
-        data = dataMaker.generate_data(self.dataDescriptor, seed=52876)
-        planner.solve_model(data)
+        dataMaker = DataMaker(seed=52876)
+        dataContainer = dataMaker.create_data_container(self.dataDescriptor)
+        dataDictionary = dataMaker.create_data_dictionary(dataContainer, self.dataDescriptor)
+
+        planner.solve_model(dataDictionary)
         self.solution = planner.extract_solution()
 
     def test_non_overlapping_patients(self):
@@ -103,8 +104,7 @@ class TestTwoPhase(unittest.TestCase):
         for t in range(1, T + 1):
             patients = []
             for k in range(1, K + 1):
-                patients.append(self.solution[(k, t)])
-            patients = [p for subList in patients for p in subList]
+                patients.extend(self.solution[(k, t)])
             for a in range(1, A + 1):
                 patientsWithAnesthetist = list(
                     filter(lambda p: p.anesthetist and p.anesthetist == a, patients))
@@ -118,8 +118,7 @@ class TestTwoPhase(unittest.TestCase):
         patients = []
         for k in range(1, K + 1):
             for t in range(1, T + 1):
-                patients.append(self.solution[(k, t)])
-        patients = [p for subList in patients for p in subList]
+                patients.extend(self.solution[(k, t)])
         patientIds = list(map(lambda p : p.id, patients))
         self.assertTrue(len(patientIds) == len(set(patientIds)))
 
