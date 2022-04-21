@@ -18,6 +18,15 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
+            # self.solver.options['threads'] = 10
+            # self.solver.options['heuristics'] = "off"
+            # self.solver.options['round'] = "on"
+            # self.solver.options['feas'] = "off"
+            # self.solver.options['passF'] = 250
+            # self.solver.options['cuts'] = "off"
+            # self.solver.options['ratioGAP'] = 0.05
+            # self.solver.options['preprocess'] = "on"
+            # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
     def objective_function(model):
