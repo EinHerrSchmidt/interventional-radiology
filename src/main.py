@@ -1,18 +1,15 @@
-from planner import ModelType, Planner
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-
+from planners import SimpleOrderingPlanner, SinglePhaseStartingMinutePlanner, StartingMinutePlanner, TwoPhaseStartingMinutePlanner
 if __name__ == '__main__':
 
-    planner = Planner(timeLimit=900,
-                      modelType=ModelType.TWO_PHASE_START_TIME_ORDERING,
-                      solver="cplex")
+    planner = SinglePhaseStartingMinutePlanner(timeLimit=900, solver="cplex")
 
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 150
+    dataDescriptor.patients = 40
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
-    dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 0.0
+    dataDescriptor.covidFrequence = 0.8
+    dataDescriptor.anesthesiaFrequence = 0.3
     dataDescriptor.specialtyBalance = 0.17
     dataDescriptor.operatingDayDuration = 240
     dataDescriptor.anesthesiaTime = 240
