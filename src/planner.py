@@ -380,7 +380,7 @@ class Planner:
         for i in range(1, self.modelInstance.I + 1):
             for k in range(1, self.modelInstance.K + 1):
                 for t in range(1, self.modelInstance.T + 1):
-                    if(self.modelInstance.x[i, k, t].value == 1):
+                    if(round(self.modelInstance.x[i, k, t].value) == 1):
                         dict[(i, k, t)] = 1
                     else:
                         dict[(i, k, t)] = 0
@@ -419,7 +419,7 @@ class Planner:
         for k in self.modelInstance.k:
             for t in self.modelInstance.t:
                 for i1 in self.modelInstance.i:
-                    if(self.modelInstance.x[i1, k, t].value == 1):
+                    if(round(self.modelInstance.x[i1, k, t].value) == 1):
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
                     else:
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
@@ -428,10 +428,10 @@ class Planner:
 
                     # droppabili solo se si droppano i rispettivi vincoli!
                     for i2 in self.modelInstance.i:
-                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value < 2)):
+                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) < 2)):
                             self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
                             fixed += 1
-                        if(i1 != i2 and (self.modelInstance.x[i1, k, t].value + self.modelInstance.x[i2, k, t].value == 2)):
+                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
                             self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
                             fixed += 1
         print(str(fixed) + " variables fixed.")
@@ -443,7 +443,7 @@ class Planner:
             for t in self.modelInstancePhaseTwo.t:
                 for i1 in self.modelInstancePhaseTwo.i:
                     for i2 in self.modelInstancePhaseTwo.i:
-                        if(self.modelInstancePhaseTwo.a[i1] == 1 and self.modelInstancePhaseTwo.a[i2] == 1 and not(i1 >= i2) and self.modelInstancePhaseTwo.x[i1, k1, t].value + self.modelInstancePhaseTwo.x[i2, k1, t].value == 2):
+                        if(self.modelInstancePhaseTwo.a[i1] == 1 and self.modelInstancePhaseTwo.a[i2] == 1 and not(i1 >= i2) and round(self.modelInstancePhaseTwo.x[i1, k1, t].value) + round(self.modelInstancePhaseTwo.x[i2, k1, t].value) == 2):
                             self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate()
                             dropped += 1
                         if(dropped > 0 and dropped % 10000 == 0):
@@ -464,20 +464,20 @@ class Planner:
             for t in modelInstance.t:
                 patients = []
                 for i in modelInstance.i:
-                    if(self.modelInstance.x[i, k, t].value == 1):
+                    if(round(self.modelInstance.x[i, k, t].value) == 1):
                         p = modelInstance.p[i]
                         c = modelInstance.c[i]
                         a = modelInstance.a[i]
                         anesthetist = 0
                         if((self.modelType == ModelType.START_TIME_ORDERING or self.modelType == ModelType.TWO_PHASE_START_TIME_ORDERING) and a == 1):
                             for alpha in modelInstance.alpha:
-                                if(modelInstance.beta[alpha, i, t].value == 1):
+                                if(round(modelInstance.beta[alpha, i, t].value) == 1):
                                     anesthetist = alpha
-                        order = modelInstance.gamma[i].value
+                        order = round(modelInstance.gamma[i].value)
                         specialty = modelInstance.specialty[i]
                         priority = modelInstance.r[i]
                         patients.append(
-                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, round(order)))
+                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
