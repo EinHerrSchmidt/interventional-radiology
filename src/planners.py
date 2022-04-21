@@ -168,7 +168,8 @@ class Planner:
                           y="Room",
                           color="Covid",
                           text="Anesthetist",
-                          labels={"Start": "Surgery start", "Finish": "Surgery end", "Room": "Operating room", "Covid": "Covid patient", "Anesthesia": "Need for anesthesia", "Anesthetist": "Anesthetist"},
+                          labels={"Start": "Surgery start", "Finish": "Surgery end", "Room": "Operating room",
+                                  "Covid": "Covid patient", "Anesthesia": "Need for anesthesia", "Anesthetist": "Anesthetist"},
                           hover_data=["Anesthesia", "Anesthetist"]
                           )
 
@@ -270,7 +271,7 @@ class StartingMinutePlanner(Planner):
             self.model.alpha,
             self.model.t,
             rule=self.anesthetist_time_rule)
-    
+
     def define_anesthetist_no_overlap_constraint(self):
         self.model.anesthetist_no_overlap_constraint = pyo.Constraint(
             self.model.i,
@@ -287,7 +288,7 @@ class StartingMinutePlanner(Planner):
             self.model.i,
             self.model.t,
             rule=self.lambda_rule)
-    
+
     def define_end_of_day_constraint(self):
         self.model.end_of_day_constraint = pyo.Constraint(
             self.model.i,
