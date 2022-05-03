@@ -368,19 +368,6 @@ class Planner:
             self.SPModel.t,
             rule=self.exclusive_precedence_rule)
 
-    def fix_y_variables(self, modelInstance):
-        print("Fixing y variables...")
-        fixed = 0
-        for k in modelInstance.k:
-            for t in modelInstance.t:
-                for i1 in modelInstance.i:
-                    for i2 in modelInstance.i:
-                        if(i1 != i2 and modelInstance.u[i1, i2] == 1):
-                            modelInstance.y[i1, i2, k, t].fix(1)
-                            modelInstance.y[i2, i1, k, t].fix(0)
-                            fixed += 2
-        print(str(fixed) + " y variables fixed.")
-
     @staticmethod
     def exclude_infeasible_patients_rule(model, modelInstance):
         return sum(1 - model.x[i, k, t] for i in model.i for k in model.k for t in model.t if modelInstance.x[i, k, t] == 1)
@@ -433,6 +420,8 @@ class Planner:
             # self.extend_data(data)
             self.unfix_SP_x_variables()
             self.fix_x_variables()
+            # self.unfix_SP_beta_variables()
+            # self.fix_beta_variables()
             # self.fix_gamma_variables()
             # self.fix_y_variables(self.SPModelInstance)
             # self.handle_lambda_variables_and_constraints()
@@ -468,6 +457,12 @@ class Planner:
                 for i in self.modelInstance.i:
                     self.SPModelInstance.x[i, k, t].unfix()
 
+    def unfix_SP_beta_variables(self):
+        for alpha in self.modelInstance.alpha:
+            for i in self.modelInstance.i:
+                for t in self.modelInstance.t:
+                    self.SPModelInstance.beta[alpha, i, t].unfix()
+
     def fix_x_variables(self):
         print("Fixing x variables for phase two...")
         fixed = 0
@@ -480,6 +475,19 @@ class Planner:
                         self.SPModelInstance.x[i1, k, t].fix(0)
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
+
+    def fix_beta_variables(self):
+        print("Fixing beta variables for phase two...")
+        fixed = 0
+        for alpha in self.modelInstance.alpha:
+            for i in self.modelInstance.i:
+                for t in self.modelInstance.t:
+                    if(round(self.modelInstance.beta[alpha, i, t].value) == 1):
+                        self.SPModelInstance.beta[alpha, i, t].fix(1)
+                    else:
+                        self.SPModelInstance.beta[alpha, i, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " beta variables fixed.")
 
     def fix_gamma_variables(self):
         print("Fixing gamma variables for phase two...")

@@ -1,32 +1,33 @@
 import logging
 from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-from planners import Planner, TwoPhaseStartingMinutePlanner
+from lbbd_planner import Planner
 if __name__ == '__main__':
 
     # planner = Planner(timeLimit=900, solver="cbc")
-    planner = TwoPhaseStartingMinutePlanner(timeLimit=900, solver="cbc")
+    planner = Planner(timeLimit=900, solver="cplex")
 
     dataDescriptor = DataDescriptor()
 
     # complicated instance
-    # dataDescriptor.patients = 60
-    # dataDescriptor.days = 5
-    # dataDescriptor.anesthetists = 2
-    # dataDescriptor.covidFrequence = 0.8
-    # dataDescriptor.anesthesiaFrequence = 0.7
-    # dataDescriptor.specialtyBalance = 0.17
-    # dataDescriptor.operatingDayDuration = 180
-    # dataDescriptor.anesthesiaTime = 180
-
-    dataDescriptor.patients = 80
+    dataDescriptor.patients = 60
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
-    dataDescriptor.covidFrequence = 0.4
-    dataDescriptor.anesthesiaFrequence = 0.5
+    dataDescriptor.covidFrequence = 0.8
+    dataDescriptor.anesthesiaFrequence = 0.7
     dataDescriptor.specialtyBalance = 0.17
-    dataDescriptor.operatingDayDuration = 240
-    dataDescriptor.anesthesiaTime = 240
+    dataDescriptor.operatingDayDuration = 180
+    dataDescriptor.anesthesiaTime = 180
+
+    # dataDescriptor.patients = 80
+    # dataDescriptor.days = 5
+    # dataDescriptor.anesthetists = 2
+    # dataDescriptor.covidFrequence = 0.4
+    # dataDescriptor.anesthesiaFrequence = 0.5
+    # dataDescriptor.specialtyBalance = 0.17
+    # dataDescriptor.operatingDayDuration = 240
+    # dataDescriptor.anesthesiaTime = 240
+
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
                                                                          mean=60,
