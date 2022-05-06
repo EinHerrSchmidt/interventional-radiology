@@ -105,9 +105,11 @@ class Planner:
             sense=pyo.maximize)
 
     def create_model_instance(self, data):
-        print("Creating model instance...")
+        print("Creating model instance for phase one...")
+        t = time.time()
         self.modelInstance = self.model.create_instance(data)
-        print("Model instance created.")
+        elapsed = (time.time() - t)
+        print("Model instance for phase one created in " + str(round(elapsed, 2)) + "s")
 
     def common_extract_solution(self, modelInstance):
         dict = {}
