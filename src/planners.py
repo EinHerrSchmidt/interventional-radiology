@@ -342,6 +342,9 @@ class StartingMinutePlanner(Planner):
                             modelInstance.y[i1, i2, k, t].fix(1)
                             modelInstance.y[i2, i1, k, t].fix(0)
                             fixed += 2
+                        if(isinstance(self, TwoPhaseStartingMinutePlanner) and i1 != i2 and (round(modelInstance.x[i1, k, t].value) + round(modelInstance.x[i2, k, t].value) < 2)):
+                            modelInstance.y[i1, i2, k, t].fix(0)
+                            fixed += 1
         print(str(fixed) + " y variables fixed.")
 
 
@@ -439,13 +442,13 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nPhase one model instance solved.")
+        print(self.model.results)
 
         # phase two
         self.extend_model()
         self.extend_data(data)
         self.create_model_instance_phase_two(data)
         self.fix_x_variables()
-        self.fix_gamma_variables()
         self.fix_y_variables(self.modelInstancePhaseTwo)
         self.handle_lambda_variables_and_constraints()
         print("Solving phase two model instance...")
@@ -510,9 +513,6 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
             for t in self.modelInstance.t:
                 for i1 in self.modelInstance.i:
                     for i2 in self.modelInstance.i:
-                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) < 2)):
-                            self.modelInstancePhaseTwo.y[i1, i2, k, t].fix(0)
-                            fixed += 1
                         if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
                             self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
                             fixed += 1
@@ -607,6 +607,7 @@ class SimpleOrderingPlanner(Planner):
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nModel instance solved.")
+        print(self.model.results)
 
     def print_solution(self):
         super().common_print_solution(self.modelInstance)

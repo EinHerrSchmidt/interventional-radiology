@@ -416,20 +416,17 @@ class Planner:
             print("Solving master problem model instance...")
             self.model.results = self.solver.solve(self.modelInstance, tee=True)
             print("\nMaster problem model instance solved.")
+            print(self.model.results)
 
-            # phase two
+            # Sub Problem
             self.unfix_SP_x_variables()
             self.fix_SP_x_variables()
-            # self.unfix_SP_beta_variables()
-            # self.fix_beta_variables()
-            # self.unfix_gamma_variables()
-            # self.fix_gamma_variables()
-            # self.unfix_y_variables()
-            # self.handle_lambda_variables_and_constraints()
-
+            self.unfix_y_variables()
+            self.fix_y_variables()
+            self.unfix_lambda_variables()
+            self.fix_lambda_variables()
             self.reactivate_constraints()
             self.deactivate_constraints()
-
             print("Solving subproblem model instance...")
             self.SPModel.results = self.solver.solve(self.SPModelInstance, tee=True)
             print("Subproblem model instance solved.")
@@ -469,6 +466,8 @@ class Planner:
                                 self.SPModelInstance.priority_constraint[i1, i2, k1, t].activate()
                             if(i1 < i2):
                                 self.SPModelInstance.exclusive_precedence_constraint[i1, i2, k1, t].activate()
+                            if(not(i1 >= i2 or not (self.SPModelInstance.a[i1] == 1 and self.SPModelInstance.a[i2] == 1))):
+                                self.SPModelInstance.lambda_constraint[i1, i2, t].activate()
                             for k2 in self.SPModelInstance.k:
                                 for a in self.SPModelInstance.alpha:
                                     if(not(i1 == i2 or k1 == k2 or self.SPModelInstance.a[i1] * self.SPModelInstance.a[i2] == 0)):
@@ -480,13 +479,15 @@ class Planner:
                 for t in self.SPModelInstance.t:
                     if(round(self.modelInstance.x[i1, k1, t].value) == 0):
                         self.SPModelInstance.end_of_day_constraint[i1, k1, t].deactivate()
-                    for i2 in self.SPModelInstance.i:
+                    for i2 in self.SPModelInstance.i: 
                         if(i1 != i2 and round(self.modelInstance.x[i1, k1, t].value) + round(self.modelInstance.x[i2, k1, t].value) < 2):
                             self.SPModelInstance.precedence_constraint[i1, i2, k1, t].deactivate()
                         if(not(i1 == i2 or not (self.modelInstance.u[i1, i2] == 1 and self.modelInstance.u[i2, i1] == 0)) and round(self.modelInstance.x[i1, k1, t].value) + round(self.modelInstance.x[i2, k1, t].value) < 2):
                             self.SPModelInstance.priority_constraint[i1, i2, k1, t].deactivate()
                         if(i1 < i2 and round(self.modelInstance.x[i1, k1, t].value) + round(self.modelInstance.x[i2, k1, t].value) < 2):
                             self.SPModelInstance.exclusive_precedence_constraint[i1, i2, k1, t].deactivate()
+                        if(self.modelInstance.a[i1] == 1 and self.modelInstance.a[i2] == 1 and not(i1 >= i2) and round(self.modelInstance.x[i1, k1, t].value) + round(self.modelInstance.x[i2, k1, t].value) == 2):
+                            self.SPModelInstance.lambda_constraint[i1, i2, t].deactivate()
                         for k2 in self.SPModelInstance.k:
                             if(not(i1 == i2 or k1 == k2 or self.modelInstance.a[i1] * self.modelInstance.a[i2] == 0) and (round(self.modelInstance.x[i1, k1, t].value) + round(self.modelInstance.x[i2, k1, t].value) == 2 or 
                                 round(self.modelInstance.x[i1, k2, t].value) + round(self.modelInstance.x[i2, k2, t].value) == 2)):
@@ -561,9 +562,28 @@ class Planner:
                             fixed += 2
         print(str(fixed) + " y variables fixed.")
 
-    def handle_lambda_variables_and_constraints(self):
-        self.fix_lambda_variables()
-        self.drop_lambda_constraints()
+    def unfix_y_variables(self):
+        for k in self.SPModelInstance.k:
+            for t in self.SPModelInstance.t:
+                for i1 in self.SPModelInstance.i:
+                    for i2 in self.SPModelInstance.i:
+                        self.SPModelInstance.y[i1, i2, k, t].unfix()
+
+    def fix_y_variables(self):
+        print("Fixing y variables...")
+        fixed = 0
+        for k in self.SPModelInstance.k:
+            for t in self.SPModelInstance.t:
+                for i1 in self.SPModelInstance.i:
+                    for i2 in self.SPModelInstance.i:
+                        if(i1 != i2 and self.modelInstance.u[i1, i2] == 1):
+                            self.SPModelInstance.y[i1, i2, k, t].fix(1)
+                            self.SPModelInstance.y[i2, i1, k, t].fix(0)
+                            fixed += 2
+                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) < 2)):
+                            self.SPModelInstance.y[i1, i2, k, t].fix(0)
+                            fixed += 1
+        print(str(fixed) + " y variables fixed.")
 
     def fix_lambda_variables(self):
         print("Fixing lambda variables for phase two...")
@@ -572,13 +592,16 @@ class Planner:
             for t in self.modelInstance.t:
                 for i1 in self.modelInstance.i:
                     for i2 in self.modelInstance.i:
-                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) < 2)):
-                            self.SPModelInstance.y[i1, i2, k, t].fix(0)
-                            fixed += 1
                         if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
                             self.SPModelInstance.Lambda[i1, i2, t].fix(0)
                             fixed += 1
         print(str(fixed) + " lambda variables fixed.")
+
+    def unfix_lambda_variables(self):
+        for t in self.modelInstance.t:
+            for i1 in self.modelInstance.i:
+                for i2 in self.modelInstance.i:
+                    self.SPModelInstance.Lambda[i1, i2, t].unfix()
 
     def drop_lambda_constraints(self):
         print("Dropping lambda constraints for phase two...")
