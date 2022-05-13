@@ -1,6 +1,8 @@
 from __future__ import division
+import logging
 import time
 import pyomo.environ as pyo
+from pyomo.opt import TerminationCondition
 import plotly.express as px
 import pandas as pd
 import datetime
@@ -409,18 +411,22 @@ class Planner:
     def solve_model(self, data):
         self.create_master_problem_model_instance(data)
         self.create_subproblem_model_instance(data)
-        self.fix_SP_y_variables()
         self.modelInstance.cuts = pyo.ConstraintList()
+
+        solverTime = 0
         while True:
             # Master problem
             print("Solving master problem model instance...")
             self.model.results = self.solver.solve(self.modelInstance, tee=True)
             print("\nMaster problem model instance solved.")
+            solverTime += self.solver._last_solve_time
             print(self.model.results)
 
             # Sub Problem
             self.unfix_SP_x_variables()
             self.fix_SP_x_variables()
+            self.unfix_SP_beta_variables()
+            self.fix_beta_variables()
             self.unfix_y_variables()
             self.fix_y_variables()
             self.unfix_lambda_variables()
@@ -430,14 +436,19 @@ class Planner:
             print("Solving subproblem model instance...")
             self.SPModel.results = self.solver.solve(self.SPModelInstance, tee=True)
             print("Subproblem model instance solved.")
-            if(not self.SPModelInstance.solutions):
+            solverTime += self.solver._last_solve_time
+            if(not self.SPModelInstance.solutions or self.SPModel.results.solver.termination_condition == TerminationCondition.infeasible):
                 self.modelInstance.cuts.add(sum(1 - self.modelInstance.x[i, k, t] for i in self.modelInstance.i for k in self.modelInstance.k for t in self.modelInstance.t if round(self.modelInstance.x[i, k, t].value) == 1) >= 1)
                 print("Generated cuts so far: \n")
                 self.modelInstance.cuts.display()
                 print("\n")
             else:
                 break
-            print(self.SPModel.results)
+        
+        print(self.SPModel.results)
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Problem solved in " + str(round(solverTime, 2)) + "s")
+        logging.info("Objective value: " + str(pyo.value(self.SPModelInstance.objective)))
 
     def create_master_problem_model_instance(self, data):
         print("Creating master problem model instance...")
@@ -445,6 +456,8 @@ class Planner:
         self.modelInstance = self.model.create_instance(data)
         elapsed = (time.time() - t)
         print("Master problem model instance created in " + str(round(elapsed, 2)) + "s")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Master problem model instance created in " + str(round(elapsed, 2)) + "s")
 
     def create_subproblem_model_instance(self, data):
         print("Creating subproblem model instance...")
@@ -452,6 +465,8 @@ class Planner:
         self.SPModelInstance = self.SPModel.create_instance(data)
         elapsed = (time.time() - t)
         print("Subproblem model instance created in " + str(round(elapsed, 2)) + "s")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Subproblem model instance created in " + str(round(elapsed, 2)) + "s")
 
     def reactivate_constraints(self):
         for i1 in self.SPModelInstance.i:
@@ -523,14 +538,12 @@ class Planner:
     def fix_beta_variables(self):
         print("Fixing beta variables for phase two...")
         fixed = 0
-        for alpha in self.modelInstance.alpha:
-            for i in self.modelInstance.i:
-                for t in self.modelInstance.t:
-                    if(round(self.modelInstance.beta[alpha, i, t].value) == 1):
-                        self.SPModelInstance.beta[alpha, i, t].fix(1)
-                    else:
-                        self.SPModelInstance.beta[alpha, i, t].fix(0)
-                    fixed += 1
+        for i in self.modelInstance.i:
+            for t in self.modelInstance.t:
+                if(sum(round(self.modelInstance.x[i, k, t].value) for k in self.modelInstance.k) == 0):
+                    for a in self.modelInstance.alpha:
+                        self.SPModelInstance.beta[a, i, t].fix(0)
+                        fixed += 1
         print(str(fixed) + " beta variables fixed.")
 
     def unfix_gamma_variables(self):
@@ -582,7 +595,8 @@ class Planner:
                             fixed += 2
                         if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) < 2)):
                             self.SPModelInstance.y[i1, i2, k, t].fix(0)
-                            fixed += 1
+                            self.SPModelInstance.y[i2, i1, k, t].fix(1)
+                            fixed += 2
         print(str(fixed) + " y variables fixed.")
 
     def fix_lambda_variables(self):
@@ -594,7 +608,8 @@ class Planner:
                     for i2 in self.modelInstance.i:
                         if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
                             self.SPModelInstance.Lambda[i1, i2, t].fix(0)
-                            fixed += 1
+                            self.SPModelInstance.Lambda[i2, i1, t].fix(1)
+                            fixed += 2
         print(str(fixed) + " lambda variables fixed.")
 
     def unfix_lambda_variables(self):

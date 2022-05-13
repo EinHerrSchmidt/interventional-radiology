@@ -1,4 +1,5 @@
 from __future__ import division
+import logging
 import time
 import pyomo.environ as pyo
 import plotly.express as px
@@ -110,6 +111,8 @@ class Planner:
         self.modelInstance = self.model.create_instance(data)
         elapsed = (time.time() - t)
         print("Model instance for phase one created in " + str(round(elapsed, 2)) + "s")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Model instance for phase one created in " + str(round(elapsed, 2)) + "s")
 
     def common_extract_solution(self, modelInstance):
         dict = {}
@@ -344,6 +347,7 @@ class StartingMinutePlanner(Planner):
                             fixed += 2
                         if(isinstance(self, TwoPhaseStartingMinutePlanner) and i1 != i2 and (round(modelInstance.x[i1, k, t].value) + round(modelInstance.x[i2, k, t].value) < 2)):
                             modelInstance.y[i1, i2, k, t].fix(0)
+                            modelInstance.y[i2, i1, k, t].fix(1)
                             fixed += 1
         print(str(fixed) + " y variables fixed.")
 
@@ -442,6 +446,9 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
         print("Solving phase one model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nPhase one model instance solved.")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Model instance for phase one solved in " + str(round(self.solver._last_solve_time, 2)) + "s")
+        logging.info("Objective value for phase one: " + str(pyo.value(self.modelInstance.objective)))
         print(self.model.results)
 
         # phase two
@@ -449,11 +456,15 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
         self.extend_data(data)
         self.create_model_instance_phase_two(data)
         self.fix_x_variables()
+        self.fix_beta_variables()
         self.fix_y_variables(self.modelInstancePhaseTwo)
         self.handle_lambda_variables_and_constraints()
         print("Solving phase two model instance...")
         self.model.results = self.solver.solve(self.modelInstancePhaseTwo, tee=True)
         print("Phase two model instance solved.")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Model instance for phase two solved in " + str(round(self.solver._last_solve_time, 2)) + "s")
+        logging.info("Objective value for phase two: " + str(pyo.value(self.modelInstancePhaseTwo.objective)))
         print(self.model.results)
 
     def extend_model(self):
@@ -479,6 +490,8 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
         self.modelInstancePhaseTwo = self.model.create_instance(data)
         elapsed = (time.time() - t)
         print("Model instance for phase two created in " + str(round(elapsed, 2)) + "s")
+        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        logging.info("Model instance for phase two created in " + str(round(elapsed, 2)) + "s")
 
     def fix_x_variables(self):
         print("Fixing x variables for phase two...")
@@ -492,6 +505,17 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
                         self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
+
+    def fix_beta_variables(self):
+        print("Fixing beta variables for phase two...")
+        fixed = 0
+        for i in self.modelInstance.i:
+            for t in self.modelInstance.t:
+                if(sum(round(self.modelInstance.x[i, k, t].value) for k in self.modelInstance.k) == 0):
+                    for a in self.modelInstance.alpha:
+                        self.modelInstancePhaseTwo.beta[a, i, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " beta variables fixed.")
 
     def fix_gamma_variables(self):
         print("Fixing gamma variables for phase two...")
@@ -515,6 +539,7 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
                     for i2 in self.modelInstance.i:
                         if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
                             self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
+                            self.modelInstancePhaseTwo.Lambda[i2, i1, t].fix(1)
                             fixed += 1
         print(str(fixed) + " lambda variables fixed.")
 
