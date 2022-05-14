@@ -207,6 +207,7 @@ class StartingMinutePlanner(Planner):
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
+           or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)
            or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)
            or (model.find_component('xParam') and model.xParam[i1, k2, t] + model.xParam[i2, k2, t] == 2)):
             return pyo.Constraint.Skip
