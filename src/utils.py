@@ -10,6 +10,7 @@ class SolutionVisualizer:
     def print_solution(self, solution):
         if(solution is None):
             print("No solution was found!")
+            return
 
         KT = max(solution.keys())
         K = KT[0]
@@ -28,6 +29,7 @@ class SolutionVisualizer:
     def plot_graph(self, solution):
         if(solution is None):
             print("No solution exists to be plotted!")
+            return
 
         KT = max(solution.keys())
         K = KT[0]
