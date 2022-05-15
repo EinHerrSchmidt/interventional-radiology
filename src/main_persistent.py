@@ -3,20 +3,21 @@ import time
 from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 from fast_lbbd import Planner
+from utils import SolutionVisualizer
 if __name__ == '__main__':
 
     # planner = Planner(timeLimit=900, solver="cbc")
-    planner = Planner(timeLimit=900, solver="cbc")
+    planner = Planner(timeLimit=30, solver="cplex")
     dataDescriptor = DataDescriptor()
     # complicated instance
-    # dataDescriptor.patients = 120
-    # dataDescriptor.days = 5
-    # dataDescriptor.anesthetists = 2
-    # dataDescriptor.covidFrequence = 0.8
-    # dataDescriptor.anesthesiaFrequence = 0.7
-    # dataDescriptor.specialtyBalance = 0.17
-    # dataDescriptor.operatingDayDuration = 180
-    # dataDescriptor.anesthesiaTime = 180
+    dataDescriptor.patients = 60
+    dataDescriptor.days = 5
+    dataDescriptor.anesthetists = 2
+    dataDescriptor.covidFrequence = 0.8
+    dataDescriptor.anesthesiaFrequence = 0.7
+    dataDescriptor.specialtyBalance = 0.17
+    dataDescriptor.operatingDayDuration = 180
+    dataDescriptor.anesthesiaTime = 180
 
     # dataDescriptor.patients = 80
     # dataDescriptor.days = 5
@@ -27,14 +28,14 @@ if __name__ == '__main__':
     # dataDescriptor.operatingDayDuration = 240
     # dataDescriptor.anesthesiaTime = 240
 
-    dataDescriptor.patients = 180
-    dataDescriptor.days = 5
-    dataDescriptor.anesthetists = 2
-    dataDescriptor.covidFrequence = 0.2
-    dataDescriptor.anesthesiaFrequence = 0.2
-    dataDescriptor.specialtyBalance = 0.17
-    dataDescriptor.operatingDayDuration = 240
-    dataDescriptor.anesthesiaTime = 240
+    # dataDescriptor.patients = 180
+    # dataDescriptor.days = 5
+    # dataDescriptor.anesthetists = 2
+    # dataDescriptor.covidFrequence = 0.2
+    # dataDescriptor.anesthesiaFrequence = 0.2
+    # dataDescriptor.specialtyBalance = 0.17
+    # dataDescriptor.operatingDayDuration = 240
+    # dataDescriptor.anesthesiaTime = 240
     dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
                                                                          high=120,
                                                                          mean=60,
@@ -56,5 +57,7 @@ if __name__ == '__main__':
     elapsed = (time.time() - t)
     logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
     logging.info("Overall elapsed time: " + str(round(elapsed, 2)) + "s")
-    planner.print_solution()
-    planner.plot_graph()
+    sv = SolutionVisualizer()
+    solution = planner.extract_solution()
+    sv.print_solution(solution)
+    sv.plot_graph(solution)

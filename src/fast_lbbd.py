@@ -3,10 +3,7 @@ from itertools import tee
 import logging
 import time
 import pyomo.environ as pyo
-from pyomo.opt import TerminationCondition
-import plotly.express as px
-import pandas as pd
-import datetime
+from pyomo.opt import SolverStatus, TerminationCondition
 
 from model import Patient
 
@@ -105,78 +102,32 @@ class Planner:
             rule=self.objective_function,
             sense=pyo.maximize)
 
-    def common_extract_solution(self, modelInstance):
+    def extract_solution(self):
+        if(self.SPModel.results.solver.status != SolverStatus.ok):
+            return None
         dict = {}
-        for k in modelInstance.k:
-            for t in modelInstance.t:
+        for k in self.SPInstance.k:
+            for t in self.SPInstance.t:
                 patients = []
-                for i in modelInstance.i:
-                    if(round(modelInstance.x[i, k, t].value) == 1):
-                        p = modelInstance.p[i]
-                        c = modelInstance.c[i]
-                        a = modelInstance.a[i]
+                for i in self.SPInstance.i:
+                    if(round(self.SPInstance.x[i, k, t].value) == 1):
+                        p = self.SPInstance.p[i]
+                        c = self.SPInstance.c[i]
+                        a = self.SPInstance.a[i]
                         anesthetist = 0
-                        for alpha in modelInstance.alpha:
-                            if(round(modelInstance.beta[alpha, i, t].value) == 1):
+                        for alpha in self.SPInstance.alpha:
+                            if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
                                 anesthetist = alpha
-                        order = round(modelInstance.gamma[i].value)
-                        specialty = modelInstance.specialty[i]
-                        priority = modelInstance.r[i]
+                        order = round(self.SPInstance.gamma[i].value)
+                        specialty = self.SPInstance.specialty[i]
+                        priority = self.SPInstance.r[i]
                         patients.append(
                             Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
 
-    def common_print_solution(self, modelInstance):
-        solution = self.common_extract_solution(modelInstance)
-        operatedPatients = 0
-        for t in modelInstance.t:
-            for k in modelInstance.k:
-                print("Day: " + str(t) + "; Operating Room: S" + str(k) + "\n")
-                for patient in solution[(k, t)]:
-                    print(patient)
-                    operatedPatients += 1
-                print("\n")
-        print("Total number of operated patients: " + str(operatedPatients))
-
-    def plot_graph_(self, modelInstance):
-        solutionPatients = self.common_extract_solution(modelInstance)
-        dataFrames = []
-        dff = pd.DataFrame([])
-        for t in modelInstance.t:
-            df = pd.DataFrame([])
-            for k in modelInstance.k:
-                patients = solutionPatients[(k, t)]
-                for idx in range(0, len(patients)):
-                    patient = patients[idx]
-                    start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=round(patient.order))
-                    finish = start + datetime.timedelta(minutes=round(patient.operatingTime))
-                    room = "S" + str(k)
-                    covid = "Y" if patient.covid == 1 else "N"
-                    anesthesia = "Y" if patient.anesthesia == 1 else "N"
-                    anesthetist = "A" + str(patient.anesthetist) if patient.anesthetist != 0 else ""
-                    dataFrameToAdd = pd.DataFrame([dict(Start=start, Finish=finish, Room=room, Covid=covid, Anesthesia=anesthesia, Anesthetist=anesthetist)])
-                    df = pd.concat([df, dataFrameToAdd])
-            dataFrames.append(df)
-            dff = pd.concat([df, dff])
-
-        fig = px.timeline(dff,
-                          x_start="Start",
-                          x_end="Finish",
-                          y="Room",
-                          color="Covid",
-                          text="Anesthetist",
-                          labels={"Start": "Surgery start", "Finish": "Surgery end", "Room": "Operating room",
-                                  "Covid": "Covid patient", "Anesthesia": "Need for anesthesia", "Anesthetist": "Anesthetist"},
-                          hover_data=["Anesthesia", "Anesthetist"]
-                          )
-
-        fig.update_layout(xaxis=dict(title='Timetable', tickformat='%H:%M:%S',))
-        fig.show()
-
-
-# assign an anesthetist if and only if a patient needs her
+    # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
@@ -330,38 +281,28 @@ class Planner:
     def exclude_infeasible_patients_rule(model, modelInstance):
         return sum(1 - model.x[i, k, t] for i in model.i for k in model.k for t in model.t if modelInstance.x[i, k, t] == 1)
 
+    def define_common_components(self, model):
+        self.define_sets(model)
+        self.define_x_variables(model)
+        self.define_parameters(model)
+        self.define_single_surgery_constraints(model)
+        self.define_surgery_time_constraints(model)
+        self.define_specialty_assignment_constraints(model)
+        self.define_anesthetists_number_param(model)
+        self.define_anesthetists_range_set(model)
+        self.define_beta_variables(model)
+        self.define_anesthetists_availability(model)
+        self.define_anesthetist_assignment_constraint(model)
+        self.define_anesthetist_time_constraint(model)
 
     def define_MP(self):
-        self.define_sets(self.MPModel)
-        self.define_x_variables(self.MPModel)
-        self.define_parameters(self.MPModel)
-        self.define_single_surgery_constraints(self.MPModel)
-        self.define_surgery_time_constraints(self.MPModel)
-        self.define_specialty_assignment_constraints(self.MPModel)
-        self.define_anesthetists_number_param(self.MPModel)
-        self.define_anesthetists_range_set(self.MPModel)
-        self.define_beta_variables(self.MPModel)
-        self.define_anesthetists_availability(self.MPModel)
-        self.define_anesthetist_assignment_constraint(self.MPModel)
-        self.define_anesthetist_time_constraint(self.MPModel)
-
+        self.define_common_components(self.MPModel)
         self.define_objective(self.MPModel)
 
     def define_SP(self):
-        self.define_sets(self.SPModel)
-        self.define_x_variables(self.SPModel)
-        self.define_parameters(self.SPModel)
-        self.define_single_surgery_constraints(self.SPModel)
-        self.define_surgery_time_constraints(self.SPModel)
-        self.define_specialty_assignment_constraints(self.SPModel)
-        self.define_anesthetists_number_param(self.SPModel)
-        self.define_anesthetists_range_set(self.SPModel)
-        self.define_beta_variables(self.SPModel)
-        self.define_anesthetists_availability(self.SPModel)
-        self.define_anesthetist_assignment_constraint(self.SPModel)
-        self.define_anesthetist_time_constraint(self.SPModel)
+        self.define_common_components(self.SPModel)
 
-
+        # SP's components
         self.define_x_parameters()
         self.define_lambda_variables()
         self.define_y_variables()
@@ -378,30 +319,33 @@ class Planner:
     def solve_model(self, data):
         self.define_MP()
         self.define_SP()
-        self.create_master_problem_model_instance(data)
+        self.create_MP_instance(data)
         self.MPInstance.cuts = pyo.ConstraintList()
 
         solverTime = 0
         while True:
-            # Master problem
-            print("Solving master problem model instance...")
+            # MP
+            print("Solving MP instance...")
             self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
-            print("\nMaster problem model instance solved.")
+            print("\nMP instance solved.")
             solverTime += self.solver._last_solve_time
-            print(self.MPModel.results)
+            # print(self.MPModel.results)
 
-            # Sub Problem
-            self.create_subproblem_model_instance(data)
+            # SP
+            self.create_SP_instance(data)
 
             self.fix_SP_x_variables()
-            self.fix_beta_variables()
-            self.fix_y_variables()
-            self.fix_lambda_variables()
-            print("Solving subproblem model instance...")
-            self.SPModel.results = self.solver.solve(self.SPModelInstance, tee=True)
-            print("Subproblem model instance solved.")
+            # self.fix_SP_gamma_variables()
+            self.fix_SP_beta_variables()
+            self.fix_SP_y_variables()
+            self.fix_SP_lambda_variables()
+            print("Solving SP instance...")
+            self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
+            print("SP instance solved.")
             solverTime += self.solver._last_solve_time
-            if(not self.SPModelInstance.solutions or self.SPModel.results.solver.termination_condition == TerminationCondition.infeasible):
+
+            # no solution found, but solver status is fine: need to add a cut
+            if(self.SPModel.results.solver.status == SolverStatus.ok and (not self.SPInstance.solutions or self.SPModel.results.solver.termination_condition == TerminationCondition.infeasible)):
                 self.MPInstance.cuts.add(sum(1 - self.MPInstance.x[i, k, t] for i in self.MPInstance.i for k in self.MPInstance.k for t in self.MPInstance.t if round(self.MPInstance.x[i, k, t].value) == 1) >= 1)
                 print("Generated cuts so far: \n")
                 self.MPInstance.cuts.display()
@@ -411,10 +355,11 @@ class Planner:
 
         # TODO check solver status in order to determine how it ended
         
-        print(self.SPModel.results)
+        
+        # print(self.SPModel.results)
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
         logging.info("Problem solved in " + str(round(solverTime, 2)) + "s")
-        logging.info("Objective value: " + str(pyo.value(self.SPModelInstance.objective)))
+        logging.info("Objective value: " + str(pyo.value(self.SPInstance.objective)))
 
     def extend_data(self, data):
         dict = {}
@@ -427,24 +372,24 @@ class Planner:
                         dict[(i, k, t)] = 0
         data[None]['xParam'] = dict
 
-    def create_master_problem_model_instance(self, data):
-        print("Creating master problem model instance...")
+    def create_MP_instance(self, data):
+        print("Creating MP instance...")
         t = time.time()
         self.MPInstance = self.MPModel.create_instance(data)
         elapsed = (time.time() - t)
-        print("Master problem model instance created in " + str(round(elapsed, 2)) + "s")
+        print("MP instance created in " + str(round(elapsed, 2)) + "s")
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Master problem model instance created in " + str(round(elapsed, 2)) + "s")
+        logging.info("MP instance created in " + str(round(elapsed, 2)) + "s")
 
-    def create_subproblem_model_instance(self, data):
+    def create_SP_instance(self, data):
         self.extend_data(data)
-        print("Creating subproblem model instance...")
+        print("Creating SP instance...")
         t = time.time()
-        self.SPModelInstance = self.SPModel.create_instance(data)
+        self.SPInstance = self.SPModel.create_instance(data)
         elapsed = (time.time() - t)
-        print("Subproblem model instance created in " + str(round(elapsed, 2)) + "s")
+        print("SP instance created in " + str(round(elapsed, 2)) + "s")
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Subproblem model instance created in " + str(round(elapsed, 2)) + "s")                       
+        logging.info("SP instance created in " + str(round(elapsed, 2)) + "s")                       
 
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
@@ -453,70 +398,63 @@ class Planner:
             for t in self.MPInstance.t:
                 for i1 in self.MPInstance.i:
                     if(round(self.MPInstance.x[i1, k, t].value) == 1):
-                        self.SPModelInstance.x[i1, k, t].fix(1)
+                        self.SPInstance.x[i1, k, t].fix(1)
                     else:
-                        self.SPModelInstance.x[i1, k, t].fix(0)
+                        self.SPInstance.x[i1, k, t].fix(0)
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
 
-    def fix_beta_variables(self):
+    def fix_SP_beta_variables(self):
         print("Fixing beta variables for phase two...")
         fixed = 0
         for i in self.MPInstance.i:
             for t in self.MPInstance.t:
                 if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 0):
                     for a in self.MPInstance.alpha:
-                        self.SPModelInstance.beta[a, i, t].fix(0)
+                        self.SPInstance.beta[a, i, t].fix(0)
                         fixed += 1
         print(str(fixed) + " beta variables fixed.")
 
-    def unfix_gamma_variables(self):
-        print("Unfixing gamma variables...")
-        fixed = 0
-        for i1 in self.MPInstance.i:
-                self.SPModelInstance.gamma[i1].unfix()
-        print(str(fixed) + " gamma variables unfixed.")
-
-    def fix_gamma_variables(self):
+    def fix_SP_gamma_variables(self):
         print("Fixing gamma variables...")
         fixed = 0
         for i1 in self.MPInstance.i:
             if(sum(round(self.MPInstance.x[i1, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-                self.SPModelInstance.gamma[i1].fix(0)
+                self.SPInstance.gamma[i1].fix(0)
                 fixed += 1
         print(str(fixed) + " gamma variables fixed.")
 
     def fix_SP_y_variables(self):
         print("Fixing y variables...")
         fixed = 0
-        for k in self.SPModelInstance.k:
-            for t in self.SPModelInstance.t:
-                for i1 in self.SPModelInstance.i:
-                    for i2 in self.SPModelInstance.i:
+        for k in self.SPInstance.k:
+            for t in self.SPInstance.t:
+                for i1 in self.SPInstance.i:
+                    for i2 in self.SPInstance.i:
                         if(i1 != i2 and self.MPInstance.u[i1, i2] == 1):
-                            self.SPModelInstance.y[i1, i2, k, t].fix(1)
-                            self.SPModelInstance.y[i2, i1, k, t].fix(0)
+                            self.SPInstance.y[i1, i2, k, t].fix(1)
+                            self.SPInstance.y[i2, i1, k, t].fix(0)
                             fixed += 2
         print(str(fixed) + " y variables fixed.")
 
-    def fix_y_variables(self):
+    def fix_SP_y_variables(self):
         print("Fixing y variables...")
         fixed = 0
-        for k in self.SPModelInstance.k:
-            for t in self.SPModelInstance.t:
-                for i1 in self.SPModelInstance.i:
-                    for i2 in self.SPModelInstance.i:
+        for k in self.SPInstance.k:
+            for t in self.SPInstance.t:
+                for i1 in self.SPInstance.i:
+                    for i2 in self.SPInstance.i:
                         if(i1 != i2 and self.MPInstance.u[i1, i2] == 1):
-                            self.SPModelInstance.y[i1, i2, k, t].fix(1)
-                            self.SPModelInstance.y[i2, i1, k, t].fix(0)
+                            self.SPInstance.y[i1, i2, k, t].fix(1)
+                            self.SPInstance.y[i2, i1, k, t].fix(0)
                             fixed += 2
                         if(i1 != i2 and (round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) < 2)):
-                            self.SPModelInstance.y[i1, i2, k, t].fix(0)
-                            self.SPModelInstance.y[i2, i1, k, t].fix(1)
+                            self.SPInstance.y[i1, i2, k, t].fix(0)
+                            self.SPInstance.y[i2, i1, k, t].fix(1)
                             fixed += 2
         print(str(fixed) + " y variables fixed.")
 
-    def fix_lambda_variables(self):
+    def fix_SP_lambda_variables(self):
         print("Fixing lambda variables for phase two...")
         fixed = 0
         for k in self.MPInstance.k:
@@ -524,31 +462,22 @@ class Planner:
                 for i1 in self.MPInstance.i:
                     for i2 in self.MPInstance.i:
                         if(i1 != i2 and (round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) == 2)):
-                            self.SPModelInstance.Lambda[i1, i2, t].fix(0)
-                            self.SPModelInstance.Lambda[i2, i1, t].fix(1)
+                            self.SPInstance.Lambda[i1, i2, t].fix(0)
+                            self.SPInstance.Lambda[i2, i1, t].fix(1)
                             fixed += 2
         print(str(fixed) + " lambda variables fixed.")
 
     def drop_lambda_constraints(self):
         print("Dropping lambda constraints for phase two...")
         dropped = 0
-        for k1 in self.SPModelInstance.k:
-            for t in self.SPModelInstance.t:
-                for i1 in self.SPModelInstance.i:
-                    for i2 in self.SPModelInstance.i:
+        for k1 in self.SPInstance.k:
+            for t in self.SPInstance.t:
+                for i1 in self.SPInstance.i:
+                    for i2 in self.SPInstance.i:
                         # remove constraint if both patients need anesthesia, but are assigned to the same room
-                        if(self.SPModelInstance.a[i1] == 1 and self.SPModelInstance.a[i2] == 1 and not(i1 >= i2) and round(self.SPModelInstance.x[i1, k1, t].value) + round(self.SPModelInstance.x[i2, k1, t].value) == 2):
-                            self.SPModelInstance.lambda_constraint[i1, i2, t].deactivate()
+                        if(self.SPInstance.a[i1] == 1 and self.SPInstance.a[i2] == 1 and not(i1 >= i2) and round(self.SPInstance.x[i1, k1, t].value) + round(self.SPInstance.x[i2, k1, t].value) == 2):
+                            self.SPInstance.lambda_constraint[i1, i2, t].deactivate()
                             dropped += 1
                         if(dropped > 0 and dropped % 10000 == 0):
                             print("Dropped " + str(dropped) + " constraints so far")
         print("Dropped " + str(dropped) + " lambda constraints in total")
-
-    def print_solution(self):
-        self.common_print_solution(self.SPModelInstance)
-
-    def plot_graph(self):
-        self.plot_graph_(self.SPModelInstance)
-
-    def extract_solution(self):
-        return self.common_extract_solution(self.SPModelInstance)
