@@ -1,6 +1,4 @@
 from __future__ import division
-from itertools import tee
-import logging
 import time
 import pyomo.environ as pyo
 from pyomo.opt import SolverStatus, TerminationCondition
@@ -340,7 +338,7 @@ class Planner:
                     "objectiveValue": pyo.value(self.SPInstance.objective),
                     "iterations": iterations}
 
-        # print(self.SPModel.results)
+        print(self.SPModel.results)
         return runInfo
 
     def extend_data(self, data):
