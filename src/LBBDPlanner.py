@@ -102,31 +102,6 @@ class Planner:
             rule=self.objective_function,
             sense=pyo.maximize)
 
-    def extract_solution(self):
-        if(self.SPModel.results.solver.status != SolverStatus.ok):
-            return None
-        dict = {}
-        for k in self.SPInstance.k:
-            for t in self.SPInstance.t:
-                patients = []
-                for i in self.SPInstance.i:
-                    if(round(self.SPInstance.x[i, k, t].value) == 1):
-                        p = self.SPInstance.p[i]
-                        c = self.SPInstance.c[i]
-                        a = self.SPInstance.a[i]
-                        anesthetist = 0
-                        for alpha in self.SPInstance.alpha:
-                            if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
-                                anesthetist = alpha
-                        order = round(self.SPInstance.gamma[i].value)
-                        specialty = self.SPInstance.specialty[i]
-                        priority = self.SPInstance.r[i]
-                        patients.append(
-                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
-                patients.sort(key=lambda x: x.order)
-                dict[(k, t)] = patients
-        return dict
-
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
@@ -319,10 +294,12 @@ class Planner:
     def solve_model(self, data):
         self.define_MP()
         self.define_SP()
-        self.create_MP_instance(data)
+        MPBuildingTime = self.create_MP_instance(data)
         self.MPInstance.cuts = pyo.ConstraintList()
 
         solverTime = 0
+        iterations = 0
+        overallSPBuildingTime = 0
         while True:
             # MP
             print("Solving MP instance...")
@@ -332,7 +309,7 @@ class Planner:
             # print(self.MPModel.results)
 
             # SP
-            self.create_SP_instance(data)
+            overallSPBuildingTime += self.create_SP_instance(data)
 
             self.fix_SP_x_variables()
             # self.fix_SP_gamma_variables()
@@ -343,6 +320,7 @@ class Planner:
             self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
             print("SP instance solved.")
             solverTime += self.solver._last_solve_time
+            iterations += 1
 
             # no solution found, but solver status is fine: need to add a cut
             if(self.SPModel.results.solver.status == SolverStatus.ok and (not self.SPInstance.solutions or self.SPModel.results.solver.termination_condition == TerminationCondition.infeasible)):
@@ -353,13 +331,17 @@ class Planner:
             else:
                 break
 
-        # TODO check solver status in order to determine how it ended
-        
-        
+        statusOk = self.SPModel.results.solver.status == SolverStatus.ok
+
+        runInfo = {"solutionTime": solverTime,
+                    "MPBuildingTime": MPBuildingTime,
+                    "overallSPBuildingTime": overallSPBuildingTime,
+                    "statusOk": statusOk,
+                    "objectiveValue": pyo.value(self.SPInstance.objective),
+                    "iterations": iterations}
+
         # print(self.SPModel.results)
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Problem solved in " + str(round(solverTime, 2)) + "s")
-        logging.info("Objective value: " + str(pyo.value(self.SPInstance.objective)))
+        return runInfo
 
     def extend_data(self, data):
         dict = {}
@@ -378,8 +360,9 @@ class Planner:
         self.MPInstance = self.MPModel.create_instance(data)
         elapsed = (time.time() - t)
         print("MP instance created in " + str(round(elapsed, 2)) + "s")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("MP instance created in " + str(round(elapsed, 2)) + "s")
+        # logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        # logging.info("MP instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
 
     def create_SP_instance(self, data):
         self.extend_data(data)
@@ -388,8 +371,9 @@ class Planner:
         self.SPInstance = self.SPModel.create_instance(data)
         elapsed = (time.time() - t)
         print("SP instance created in " + str(round(elapsed, 2)) + "s")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("SP instance created in " + str(round(elapsed, 2)) + "s")                       
+        # logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        # logging.info("SP instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
 
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
@@ -467,17 +451,27 @@ class Planner:
                             fixed += 2
         print(str(fixed) + " lambda variables fixed.")
 
-    def drop_lambda_constraints(self):
-        print("Dropping lambda constraints for phase two...")
-        dropped = 0
-        for k1 in self.SPInstance.k:
+    def extract_solution(self):
+        if(self.SPModel.results.solver.status != SolverStatus.ok):
+            return None
+        dict = {}
+        for k in self.SPInstance.k:
             for t in self.SPInstance.t:
-                for i1 in self.SPInstance.i:
-                    for i2 in self.SPInstance.i:
-                        # remove constraint if both patients need anesthesia, but are assigned to the same room
-                        if(self.SPInstance.a[i1] == 1 and self.SPInstance.a[i2] == 1 and not(i1 >= i2) and round(self.SPInstance.x[i1, k1, t].value) + round(self.SPInstance.x[i2, k1, t].value) == 2):
-                            self.SPInstance.lambda_constraint[i1, i2, t].deactivate()
-                            dropped += 1
-                        if(dropped > 0 and dropped % 10000 == 0):
-                            print("Dropped " + str(dropped) + " constraints so far")
-        print("Dropped " + str(dropped) + " lambda constraints in total")
+                patients = []
+                for i in self.SPInstance.i:
+                    if(round(self.SPInstance.x[i, k, t].value) == 1):
+                        p = self.SPInstance.p[i]
+                        c = self.SPInstance.c[i]
+                        a = self.SPInstance.a[i]
+                        anesthetist = 0
+                        for alpha in self.SPInstance.alpha:
+                            if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
+                                anesthetist = alpha
+                        order = round(self.SPInstance.gamma[i].value)
+                        specialty = self.SPInstance.specialty[i]
+                        priority = self.SPInstance.r[i]
+                        patients.append(
+                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
+                patients.sort(key=lambda x: x.order)
+                dict[(k, t)] = patients
+        return dict
