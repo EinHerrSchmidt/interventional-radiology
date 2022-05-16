@@ -114,20 +114,25 @@ class Planner:
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-           or (model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)
-           or (model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)
-           or (model.xParam[i1, k2, t] + model.xParam[i2, k2, t] == 2)):
+           or (model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
-    # precedence across rooms, same day
+    # precedence across rooms
     @staticmethod
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
+        i1AllDay = 0
+        i2AllDay = 0
         for k in model.k:
+            # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
             if(model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
                 return pyo.Constraint.Skip
+            i1AllDay += model.xParam[i1, k, t]
+            i2AllDay += model.xParam[i2, k, t]
+        if(i1AllDay == 0 or i2AllDay == 0):
+            return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
@@ -321,7 +326,7 @@ class Planner:
             iterations += 1
 
             # no solution found, but solver status is fine: need to add a cut
-            if(self.SPModel.results.solver.status == SolverStatus.ok and (not self.SPInstance.solutions or self.SPModel.results.solver.termination_condition == TerminationCondition.infeasible)):
+            if(self.SPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
                 self.MPInstance.cuts.add(sum(1 - self.MPInstance.x[i, k, t] for i in self.MPInstance.i for k in self.MPInstance.k for t in self.MPInstance.t if round(self.MPInstance.x[i, k, t].value) == 1) >= 1)
                 print("Generated cuts so far: \n")
                 self.MPInstance.cuts.display()
@@ -333,7 +338,7 @@ class Planner:
 
         runInfo = {"solutionTime": solverTime,
                     "MPBuildingTime": MPBuildingTime,
-                    "overallSPBuildingTime": overallSPBuildingTime,
+                    "SPBuildingTime": overallSPBuildingTime,
                     "statusOk": statusOk,
                     "objectiveValue": pyo.value(self.SPInstance.objective),
                     "iterations": iterations}
@@ -374,7 +379,7 @@ class Planner:
         return elapsed
 
     def fix_SP_x_variables(self):
-        print("Fixing x variables for phase two...")
+        print("Fixing x variables for SP...")
         fixed = 0
         for k in self.MPInstance.k:
             for t in self.MPInstance.t:
@@ -387,7 +392,7 @@ class Planner:
         print(str(fixed) + " x variables fixed.")
 
     def fix_SP_beta_variables(self):
-        print("Fixing beta variables for phase two...")
+        print("Fixing beta variables for SP...")
         fixed = 0
         for i in self.MPInstance.i:
             for t in self.MPInstance.t:
@@ -411,42 +416,34 @@ class Planner:
         fixed = 0
         for k in self.SPInstance.k:
             for t in self.SPInstance.t:
-                for i1 in self.SPInstance.i:
-                    for i2 in self.SPInstance.i:
-                        if(i1 != i2 and self.MPInstance.u[i1, i2] == 1):
+                for i1 in range(2, self.MPInstance.I + 1):
+                    for i2 in range(1, i1):
+                        if((self.MPInstance.u[i1, i2] == 1 or round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) < 2)):
                             self.SPInstance.y[i1, i2, k, t].fix(1)
                             self.SPInstance.y[i2, i1, k, t].fix(0)
-                            fixed += 2
-        print(str(fixed) + " y variables fixed.")
-
-    def fix_SP_y_variables(self):
-        print("Fixing y variables...")
-        fixed = 0
-        for k in self.SPInstance.k:
-            for t in self.SPInstance.t:
-                for i1 in self.SPInstance.i:
-                    for i2 in self.SPInstance.i:
-                        if(i1 != i2 and self.MPInstance.u[i1, i2] == 1):
-                            self.SPInstance.y[i1, i2, k, t].fix(1)
-                            self.SPInstance.y[i2, i1, k, t].fix(0)
-                            fixed += 2
-                        if(i1 != i2 and (round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) < 2)):
-                            self.SPInstance.y[i1, i2, k, t].fix(0)
-                            self.SPInstance.y[i2, i1, k, t].fix(1)
                             fixed += 2
         print(str(fixed) + " y variables fixed.")
 
     def fix_SP_lambda_variables(self):
-        print("Fixing lambda variables for phase two...")
+        print("Fixing lambda variables for SP...")
         fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i1 in self.MPInstance.i:
-                    for i2 in self.MPInstance.i:
-                        if(i1 != i2 and (round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) == 2)):
+        for t in self.MPInstance.t:
+            for i1 in range(2, self.MPInstance.I + 1):
+                for i2 in range(1, i1):
+                    i1AllDay = 0
+                    i2AllDay = 0
+                    for k in self.MPInstance.k:
+                        if(round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) == 2):
                             self.SPInstance.Lambda[i1, i2, t].fix(0)
                             self.SPInstance.Lambda[i2, i1, t].fix(1)
                             fixed += 2
+                            break
+                        i1AllDay += round(self.MPInstance.x[i1, k, t].value)
+                        i2AllDay += round(self.MPInstance.x[i2, k, t].value)
+                    if(i1AllDay == 0 or i2AllDay == 0 or not (self.MPInstance.a[i1] == 1 and self.MPInstance.a[i2] == 1)):
+                        self.SPInstance.Lambda[i1, i2, t].fix(1)
+                        self.SPInstance.Lambda[i2, i1, t].fix(0)
+                        fixed += 2
         print(str(fixed) + " lambda variables fixed.")
 
     def extract_solution(self):
