@@ -213,11 +213,22 @@ class StartingMinutePlanner(Planner):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
-    # precedence across rooms, same day
+    # precedence across rooms
     @staticmethod
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
+        if(model.find_component('xParam')):
+            i1AllDay = 0
+            i2AllDay = 0
+            for k in model.k:
+                # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
+                if(model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
+                    return pyo.Constraint.Skip
+                i1AllDay += model.xParam[i1, k, t]
+                i2AllDay += model.xParam[i2, k, t]
+            if(i1AllDay == 0 or i2AllDay == 0):
+                return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
@@ -340,13 +351,13 @@ class StartingMinutePlanner(Planner):
         fixed = 0
         for k in modelInstance.k:
             for t in modelInstance.t:
-                for i1 in modelInstance.i:
-                    for i2 in modelInstance.i:
-                        if(i1 != i2 and modelInstance.u[i1, i2] == 1):
+                for i1 in range(2, self.modelInstance.I + 1):
+                    for i2 in range(1, i1):
+                        if(modelInstance.u[i1, i2] == 1):
                             modelInstance.y[i1, i2, k, t].fix(1)
                             modelInstance.y[i2, i1, k, t].fix(0)
                             fixed += 2
-                        if(isinstance(self, TwoPhaseStartingMinutePlanner) and i1 != i2 and (round(modelInstance.x[i1, k, t].value) + round(modelInstance.x[i2, k, t].value) < 2)):
+                        if(isinstance(self, TwoPhaseStartingMinutePlanner) and (round(modelInstance.x[i1, k, t].value) + round(modelInstance.x[i2, k, t].value) < 2)):
                             modelInstance.y[i1, i2, k, t].fix(0)
                             modelInstance.y[i2, i1, k, t].fix(1)
                             fixed += 1
@@ -459,7 +470,7 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
         self.fix_x_variables()
         self.fix_beta_variables()
         self.fix_y_variables(self.modelInstancePhaseTwo)
-        self.handle_lambda_variables_and_constraints()
+        self.fix_lambda_variables()
         print("Solving phase two model instance...")
         self.model.results = self.solver.solve(self.modelInstancePhaseTwo, tee=True)
         print("Phase two model instance solved.")
@@ -527,37 +538,27 @@ class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
                 fixed += 1
         print(str(fixed) + " gamma variables fixed.")
 
-    def handle_lambda_variables_and_constraints(self):
-        self.fix_lambda_variables()
-        self.drop_lambda_constraints()
-
     def fix_lambda_variables(self):
-        print("Fixing lambda variables for phase two...")
+        print("Fixing lambda variables for phase one...")
         fixed = 0
-        for k in self.modelInstance.k:
-            for t in self.modelInstance.t:
-                for i1 in self.modelInstance.i:
-                    for i2 in self.modelInstance.i:
-                        if(i1 != i2 and (round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2)):
+        for t in self.modelInstance.t:
+            for i1 in range(2, self.modelInstance.I + 1):
+                for i2 in range(1, i1):
+                    i1AllDay = 0
+                    i2AllDay = 0
+                    for k in self.modelInstance.k:
+                        if(round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2):
                             self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
                             self.modelInstancePhaseTwo.Lambda[i2, i1, t].fix(1)
-                            fixed += 1
+                            fixed += 2
+                            break
+                        i1AllDay += round(self.modelInstance.x[i1, k, t].value)
+                        i2AllDay += round(self.modelInstance.x[i2, k, t].value)
+                    if(i1AllDay == 0 or i2AllDay == 0 or not (self.modelInstance.a[i1] == 1 and self.modelInstance.a[i2] == 1)):
+                        self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(1)
+                        self.modelInstancePhaseTwo.Lambda[i2, i1, t].fix(0)
+                        fixed += 2
         print(str(fixed) + " lambda variables fixed.")
-
-    def drop_lambda_constraints(self):
-        print("Dropping lambda constraints for phase two...")
-        dropped = 0
-        for k1 in self.modelInstancePhaseTwo.k:
-            for t in self.modelInstancePhaseTwo.t:
-                for i1 in self.modelInstancePhaseTwo.i:
-                    for i2 in self.modelInstancePhaseTwo.i:
-                        # remove constraint if both patients need anesthesia, but are assigned to the same room
-                        if(self.modelInstancePhaseTwo.a[i1] == 1 and self.modelInstancePhaseTwo.a[i2] == 1 and not(i1 >= i2) and round(self.modelInstancePhaseTwo.x[i1, k1, t].value) + round(self.modelInstancePhaseTwo.x[i2, k1, t].value) == 2):
-                            self.modelInstancePhaseTwo.lambda_constraint[i1, i2, t].deactivate()
-                            dropped += 1
-                        if(dropped > 0 and dropped % 10000 == 0):
-                            print("Dropped " + str(dropped) + " constraints so far")
-        print("Dropped " + str(dropped) + " lambda constraints in total")
 
     def print_solution(self):
         super().common_print_solution(self.modelInstancePhaseTwo)
