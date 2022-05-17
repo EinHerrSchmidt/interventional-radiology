@@ -167,7 +167,7 @@ class Planner:
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        # if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0) or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        # if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
         #     return pyo.Constraint.Skip
         if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0)):
             return pyo.Constraint.Skip
