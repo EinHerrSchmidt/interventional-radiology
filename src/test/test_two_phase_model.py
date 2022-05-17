@@ -72,6 +72,21 @@ class TestTwoPhase(unittest.TestCase):
                                 self.assertTrue((k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order or k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order)
                                  and not (k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order and k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order))
 
+    def test_priority_constraints(self):
+        K = self.dataDescriptor.operatingRooms
+        T = self.dataDescriptor.days
+        sorted = True
+        for k in range(1, K + 1):
+            for t in range(1, T + 1):
+                patients = self.solution[(k, t)]
+                patientsNumber = len(patients)
+                if(patientsNumber <= 1):
+                    continue
+                for i in range(1, patientsNumber):
+                    if(patients[i].covid < patients[i - 1].covid):
+                        sorted = False
+        self.assertTrue(sorted)
+
     def test_surgery_time_constraint(self):
         K = self.dataDescriptor.operatingRooms
         T = self.dataDescriptor.days
