@@ -21,14 +21,15 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            # self.solver.options['threads'] = 10
-            # self.solver.options['heuristics'] = "off"
-            # self.solver.options['round'] = "on"
-            # self.solver.options['feas'] = "off"
-            # self.solver.options['passF'] = 250
-            # self.solver.options['cuts'] = "off"
+            self.solver.options['threads'] = 12
+            self.solver.options['heuristicsOnOff'] = "on"
+            self.solver.options['round'] = "on"
+            self.solver.options['feas'] = "on"
+            # self.solver.options['passF'] = 30
+            self.solver.options['cuts'] = "on"
             # self.solver.options['ratioGAP'] = 0.05
             # self.solver.options['preprocess'] = "on"
+            self.solver.options['randomc'] = 52876
             # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
@@ -119,10 +120,10 @@ class Planner:
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(model.status[i1, k1, t] == Planner.DISCARDED or model.status[i2, k2, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        # if(model.status[i1, k1, t] == Planner.FIXED and model.status[i2, k2, t] == Planner.FIXED
-        # and (i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0 or (model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2))):
-        #     return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+            return pyo.Constraint.Skip
+        if(model.status[i1, k1, t] == Planner.FIXED and model.status[i2, k2, t] == Planner.FIXED
+        and model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
@@ -131,24 +132,27 @@ class Planner:
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
-        # for k in model.k:
-        #     i1Discarded = True
-        #     i2Discarded = True
-        #     if(model.status[i1, k, t] != Planner.DISCARDED):
-        #         i1Discarded = False
-        #     if(model.status[i2, k, t] != Planner.DISCARDED):
-        #         i2Discarded = False
-        # if(i1Discarded or i2Discarded):
-        #     return pyo.Constraint.Skip
-        # for k in model.k:
-        #     if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED and model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
-        #         return pyo.Constraint.Skip
+        i1AllDay = 0
+        i2AllDay = 0
+        for k in model.k:
+            # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
+            if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
+            and model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
+                return pyo.Constraint.Skip
+            if(model.status[i1, k, t] == Planner.FIXED or model.status[i1, k, t] == Planner.FREE):
+                i1AllDay += 1
+            if(model.status[i2, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FREE):
+                i2AllDay += 1
+        if(i1AllDay == 0 or i2AllDay == 0):
+            return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
         if(model.status[i, k, t] == Planner.DISCARDED):
+            return pyo.Constraint.Skip
+        if(model.xParam[i, k, t] == 0):
             return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
 
@@ -157,9 +161,10 @@ class Planner:
     def time_ordering_precedence_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        # if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
-        #     return pyo.Constraint.Skip
         if(i1 == i2):
+            return pyo.Constraint.Skip
+        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
+        and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
@@ -167,9 +172,10 @@ class Planner:
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        # if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
-        #     return pyo.Constraint.Skip
-        if(i1 == i2 or not (model.u[i1, i2] == 1 and model.u[i2, i1] == 0)):
+        if(i1 == i2 or model.u[i1, i2] == 0 ):
+            return pyo.Constraint.Skip
+        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
+            and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -178,9 +184,10 @@ class Planner:
     def exclusive_precedence_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        # if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
-        #     return pyo.Constraint.Skip
         if(i1 >= i2):
+            return pyo.Constraint.Skip
+        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
+           and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
@@ -340,7 +347,7 @@ class Planner:
         # self.fix_SP_gamma_variables()
         self.fix_SP_beta_variables()
         self.fix_SP_y_variables()
-        # self.fix_SP_lambda_variables()
+        self.fix_SP_lambda_variables()
         print("Solving SP instance...")
         self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
         print("SP instance solved.")
@@ -447,14 +454,26 @@ class Planner:
     def fix_SP_lambda_variables(self):
         print("Fixing lambda variables for phase two...")
         fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i1 in range(2, self.MPInstance.I + 1):
-                    for i2 in range(1, i1):
-                        if((self.SPInstance.status[i1, k, t] == Planner.DISCARDED or self.SPInstance.status[i2, k, t] == Planner.DISCARDED)):
-                            self.SPInstance.Lambda[i1, i2, t].fix(1)
-                            self.SPInstance.Lambda[i2, i1, t].fix(0)
+        for i1 in self.SPInstance.i:
+            for i2 in self.SPInstance.i:
+                for t in self.SPInstance.t:
+                    i1AllDay = 0
+                    i2AllDay = 0
+                    for k in self.SPInstance.k:
+                        # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
+                        if(self.SPInstance.status[i1, k, t] == Planner.FIXED and self.SPInstance.status[i2, k, t] == Planner.FIXED
+                        and self.SPInstance.xParam[i1, k, t] + self.SPInstance.xParam[i2, k, t] == 2):
+                            self.SPInstance.Lambda[i1, i2, t].fix(0)
+                            self.SPInstance.Lambda[i2, i1, t].fix(1)
                             fixed += 2
+                        if(self.SPInstance.status[i1, k, t] == Planner.FIXED or self.SPInstance.status[i1, k, t] == Planner.FREE):
+                            i1AllDay += 1
+                        if(self.SPInstance.status[i2, k, t] == Planner.FIXED or self.SPInstance.status[i2, k, t] == Planner.FREE):
+                            i2AllDay += 1
+                    if(i1AllDay == 0 or i2AllDay == 0):
+                        self.SPInstance.Lambda[i1, i2, t].fix(0)
+                        self.SPInstance.Lambda[i2, i1, t].fix(1)
+                        fixed += 2
         print(str(fixed) + " lambda variables fixed.")
 
     def extract_solution(self):
