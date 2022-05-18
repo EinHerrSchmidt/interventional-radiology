@@ -17,14 +17,15 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            # self.solver.options['threads'] = 10
-            # self.solver.options['heuristics'] = "off"
-            # self.solver.options['round'] = "on"
-            # self.solver.options['feas'] = "off"
-            # self.solver.options['passF'] = 250
-            # self.solver.options['cuts'] = "off"
+            self.solver.options['threads'] = 12
+            self.solver.options['heuristicsOnOff'] = "on"
+            self.solver.options['round'] = "on"
+            self.solver.options['feas'] = "on"
+            # self.solver.options['passF'] = 30
+            self.solver.options['cuts'] = "on"
             # self.solver.options['ratioGAP'] = 0.05
             # self.solver.options['preprocess'] = "on"
+            self.solver.options['randomc'] = 52876
             # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
