@@ -1,23 +1,24 @@
 import logging
 import time
+from tokenize import Single
 from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-from lbbd_planner import Planner
+from planners import SinglePhaseStartingMinutePlanner, TwoPhaseStartingMinutePlanner
 if __name__ == '__main__':
 
-    solvers = ["cplex", "gurobi", "cbc"]
+    solvers = ["cplex"]
     for solver in solvers:
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
         logging.info(solver)
         logging.info("\n")
 
         # planner = Planner(timeLimit=900, solver="cbc")
-        planner = Planner(timeLimit=900, solver=solver)
+        planner = TwoPhaseStartingMinutePlanner(timeLimit=30, solver=solver)
 
         dataDescriptor = DataDescriptor()
 
         # complicated instance
-        dataDescriptor.patients = 60
+        dataDescriptor.patients = 180
         dataDescriptor.days = 5
         dataDescriptor.anesthetists = 2
         dataDescriptor.covidFrequence = 0.8
