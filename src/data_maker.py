@@ -200,7 +200,7 @@ class DataMaker:
         dict = {}
         for i in range(0, len(sample)):
             if(isTime):
-                dict[(i + 1)] = int(sample[i]) - int(sample[i]) % 10
+                dict[(i + 1)] = int(sample[i]) #- int(sample[i]) % 10
             else:
                 dict[(i + 1)] = int(sample[i])
         return dict
@@ -349,3 +349,43 @@ class DataMaker:
                           anesthetist="N/A",
                           order="N/A"
                           ))
+
+    def create_data_dictionary_real_data(self, dataContainer: DataContainer, dataDescriptor: DataDescriptor):
+        operatingRoomTimes = dataContainer.operatingRoomTimes
+        anesthetistsTimes = dataContainer.anesthetistsTimes
+        operatingTimes = [24,30,127,15,63,55,58,75,15,23,18,31,50,84,79,35,100,32,24,70,32,33,23,90,10,50,18,27,17,14,23,25,85,92,54,39,19,19,85,35,95,40,65,25,30,34,30,92,39,22,70,15,15,86,24,37,19,33,32,13,40,37,23,30,29,43,27,125,9,128,27,23,22,86,20,29,6,97,60,63,95,30,27,70,30,34,225,46,40,77,20,40,25,130,55,15,52,66,106,27,28,35,125]
+        priorities = dataContainer.asList(dataContainer.priorities)
+        anesthesiaFlags = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        covidFlags = dataContainer.asList(dataContainer.covidFlags)
+        specialties = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ids = dataContainer.asList(dataContainer.ids)
+        totalOperatingTime = sum(operatingTimes)
+        return {
+            None: {
+                'I': {None: dataDescriptor.patients},
+                'J': {None: dataDescriptor.specialties},
+                'K': {None: dataDescriptor.operatingRooms},
+                'T': {None: dataDescriptor.days},
+                'A': {None: dataDescriptor.anesthetists},
+                'M': {None: 7},
+                's': operatingRoomTimes,
+                'An': anesthetistsTimes,
+                'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
+                'p': self.create_dictionary_entry(operatingTimes, isTime=True),
+                'r': self.create_dictionary_entry(priorities, isTime=False),
+                'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
+                'c': self.create_dictionary_entry(covidFlags, isTime=False),
+                'u': self.create_precedence(covidFlags),
+                'patientId': self.create_dictionary_entry(ids, isTime=False),
+                'specialty': self.create_dictionary_entry(specialties, isTime=False),
+                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, self.create_dictionary_entry(specialties, isTime=False)),
+                'bigM': {
+                    1: dataDescriptor.patients,
+                    2: totalOperatingTime,
+                    3: totalOperatingTime,
+                    4: totalOperatingTime,
+                    5: totalOperatingTime,
+                    6: dataDescriptor.patients
+                }
+            }
+        }
