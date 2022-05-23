@@ -398,10 +398,36 @@ class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
     def solve_model(self, data):
         self.create_model_instance(data)
         self.fix_y_variables(self.modelInstance)
+        self.fix_x_variables()
+        self.fix_beta_variables()
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nModel instance solved.")
         print(self.model.results)
+
+    def fix_x_variables(self):
+        print("Fixing x variables...")
+        fixed = 0
+        for k in self.modelInstance.k:
+            for t in self.modelInstance.t:
+                for i in self.modelInstance.i:
+                    if(self.modelInstance.specialty[i] == 1 and (k == 3 or k == 4)):
+                        self.modelInstance.x[i, k, t].fix(0)
+                    if(self.modelInstance.specialty[i] == 2 and (k == 1 or k == 2)):
+                        self.modelInstance.x[i, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
+    def fix_beta_variables(self):
+        print("Fixing beta variables...")
+        fixed = 0
+        for i in self.modelInstance.i:
+            if(self.modelInstance.a[i] == 0):
+                for t in self.modelInstance.t:
+                    for a in self.modelInstance.alpha:
+                        self.modelInstance.beta[a, i, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " beta variables fixed.")
 
     def print_solution(self):
         super().common_print_solution(self.modelInstance)
