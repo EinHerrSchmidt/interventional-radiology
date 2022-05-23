@@ -108,6 +108,8 @@ class Planner:
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
+        if(model.a[i] == 0):
+            return pyo.Constraint.Skip
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
     # do not exceed anesthetist time in each day
@@ -334,6 +336,8 @@ class Planner:
         SPBuildingTime = 0
 
         # MP
+        self.fix_MP_x_variables()
+        self.fix_MP_beta_variables()
         print("Solving MP instance...")
         self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
         print("\nMP instance solved.")
@@ -418,6 +422,19 @@ class Planner:
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
 
+    def fix_MP_x_variables(self):
+        print("Fixing x variables for MP...")
+        fixed = 0
+        for k in self.MPInstance.k:
+            for t in self.MPInstance.t:
+                for i in self.MPInstance.i:
+                    if(self.MPInstance.specialty[i] == 1 and (k == 3 or k == 4)):
+                        self.MPInstance.x[i, k, t].fix(0)
+                    if(self.MPInstance.specialty[i] == 2 and (k == 1 or k == 2)):
+                        self.MPInstance.x[i, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
     def fix_SP_beta_variables(self):
         print("Fixing beta variables for phase two...")
         fixed = 0
@@ -426,6 +443,17 @@ class Planner:
                 if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 0):
                     for a in self.MPInstance.alpha:
                         self.SPInstance.beta[a, i, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " beta variables fixed.")
+
+    def fix_MP_beta_variables(self):
+        print("Fixing beta variables for MP...")
+        fixed = 0
+        for i in self.MPInstance.i:
+            if(self.MPInstance.a[i] == 0):
+                for t in self.MPInstance.t:
+                    for a in self.MPInstance.alpha:
+                        self.MPInstance.beta[a, i, t].fix(0)
                         fixed += 1
         print(str(fixed) + " beta variables fixed.")
 
