@@ -1,5 +1,6 @@
 from scipy.stats import truncnorm
 from scipy.stats import binom
+from scipy.stats import uniform
 import numpy as np
 
 from model import Patient
@@ -200,7 +201,7 @@ class DataMaker:
         dict = {}
         for i in range(0, len(sample)):
             if(isTime):
-                dict[(i + 1)] = int(sample[i]) #- int(sample[i]) % 10
+                dict[(i + 1)] = int(sample[i]) - int(sample[i]) % 5
             else:
                 dict[(i + 1)] = int(sample[i])
         return dict
@@ -268,11 +269,12 @@ class DataMaker:
         anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists,
                                                                dataDescriptor.days,
                                                                dataDescriptor.anesthesiaTime)
-        operatingTimes = self.generate_truncnorm_sample(dataDescriptor.patients,
-                                                        dataDescriptor.operatingTimeDistribution.low,
-                                                        dataDescriptor.operatingTimeDistribution.high,
-                                                        dataDescriptor.operatingTimeDistribution.mean,
-                                                        dataDescriptor.operatingTimeDistribution.stdDev)
+        # operatingTimes = self.generate_truncnorm_sample(dataDescriptor.patients,
+        #                                                 dataDescriptor.operatingTimeDistribution.low,
+        #                                                 dataDescriptor.operatingTimeDistribution.high,
+        #                                                 dataDescriptor.operatingTimeDistribution.mean,
+        #                                                 dataDescriptor.operatingTimeDistribution.stdDev)
+        operatingTimes = self.draw_categorical_from_sample(dataDescriptor.patients)
         priorities = self.generate_truncnorm_sample(dataDescriptor.patients,
                                                     dataDescriptor.priorityDistribution.low,
                                                     dataDescriptor.priorityDistribution.high,
@@ -310,7 +312,7 @@ class DataMaker:
                 's': operatingRoomTimes,
                 'An': anesthetistsTimes,
                 'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
-                'p': self.create_dictionary_entry(operatingTimes, isTime=True),
+                'p': self.create_dictionary_entry(operatingTimes, isTime=False),
                 'r': self.create_dictionary_entry(priorities, isTime=False),
                 'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
                 'c': self.create_dictionary_entry(covidFlags, isTime=False),
@@ -389,3 +391,20 @@ class DataMaker:
                 }
             }
         }
+
+    def draw_categorical_from_sample(self, n):
+        sample = [60, 20, 135, 20, 60, 20, 135, 40, 20, 60, 20, 40, 15, 30, 40, 130, 60, 20, 40, 20, 20, 20, 135, 20, 20, 20, 20, 35, 50, 15, 20, 20, 40, 20, 20, 15, 100, 20, 15, 20, 20, 20, 20, 50, 20, 20, 20, 60, 20, 35, 40,
+          35, 15, 15, 35, 20, 135, 20, 30, 20, 20, 20, 35, 135, 30, 30, 15, 20, 20, 20, 20, 20, 30, 20, 15, 20, 135, 135, 60, 15, 15, 20, 15, 60, 20, 20, 50, 60, 30, 15, 20, 50, 60, 135, 20, 15, 20, 30, 15, 90, 50, 30, 60, 60, 30]
+        unique, counts = np.unique(sample, return_counts=True)
+        frequencies = counts / sum(counts)
+        cumulativeSum = np.cumsum(frequencies)
+        draws = uniform.rvs(size=n)
+        result = np.zeros(n) - 1
+        for i in range(0, len(draws)):
+            for j in range(0, len(cumulativeSum)):
+                if(draws[i] <= cumulativeSum[j]):
+                    result[i] = unique[j]
+                    break
+            if(result[i] == -1):
+                result[i] = unique[-1]
+        return result + 30
