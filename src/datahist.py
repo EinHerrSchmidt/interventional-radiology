@@ -2,113 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 
-x = np.random.normal(170, 10, 250)
-
-sample = [24,
-30,
-30,
-127,
-15,
-63,
-55,
-58,
-75,
-15,
-23,
-18,
-31,
-50,
-84,
-79,
-35,
-100,
-32,
-24,
-70,
-32,
-33,
-23,
-90,
-10,
-50,
-18,
-27,
-17,
-14,
-23,
-25,
-85,
-92,
-54,
-39,
-19,
-19,
-85,
-35,
-95,
-40,
-65,
-25,
-30,
-34,
-30,
-92,
-39,
-22,
-70,
-15,
-15,
-86,
-24,
-37,
-19,
-33,
-32,
-13,
-40,
-37,
-23,
-30,
-29,
-43,
-27,
-125,
-9,
-128,
-27,
-23,
-22,
-86,
-20,
-29,
-6,
-97,
-60,
-63,
-95,
-30,
-27,
-70,
-30,
-34,
-225,
-46,
-40,
-77,
-20,
-40,
-25,
-130,
-55,
-15,
-52,
-66,
-106,
-27,
-28,
-35,
-125,
-50]
+sample = [60, 20, 135, 20, 60, 20, 135, 40, 20, 60, 20, 40, 15, 30, 40, 130, 60, 20, 40, 20, 20, 20, 135, 20, 20, 20, 20, 35, 50, 15, 20, 20, 40, 20, 20, 15, 100, 20, 15, 20, 20, 20, 20, 50, 20, 20, 20, 60, 20, 35, 40,
+          35, 15, 15, 35, 20, 135, 20, 30, 20, 20, 20, 35, 135, 30, 30, 15, 20, 20, 20, 20, 20, 30, 20, 15, 20, 135, 135, 60, 15, 15, 20, 15, 60, 20, 20, 50, 60, 30, 15, 20, 50, 60, 135, 20, 15, 20, 30, 15, 90, 50, 30, 60, 60, 30]
 
 x = np.log(sample)
 
@@ -126,6 +21,38 @@ else:
 mu, std = stats.norm.fit(x)
 print("Mean: {:g}\nStandard deviation: {:g}".format(mu, std))
 print("Mean: {:g}\nStandard deviation: {:g}".format(np.mean(x), np.std(x)))
+
+
+
+unique, counts = np.unique(sample, return_counts=True)
+print(unique)
+print(counts)
+frequencies = counts / sum(counts)
+print(frequencies)
+print(sum(frequencies))
+cumulativeSum = np.cumsum(frequencies)
+print(cumulativeSum)
+
+def draw_categorical_from_sample(sample, n):
+    unique, counts = np.unique(sample, return_counts=True)
+    frequencies = counts / sum(counts)
+    cumulativeSum = np.cumsum(frequencies)
+    draws = stats.uniform.rvs(size=n)
+    result = np.zeros(n) - 1
+    for i in range(0, len(draws)):
+        for j in range(0, len(cumulativeSum)):
+            if(draws[i] <= cumulativeSum[j]):
+                result[i] = unique[j]
+                break
+        if(result[i] == -1):
+            result[i] = unique[-1]
+    return result
+
+categoricalSample = draw_categorical_from_sample(sample, 300)
+print(categoricalSample)
+
+plt.hist(categoricalSample, bins='auto')
+plt.show()
 
 plt.hist(sample, bins='auto')
 plt.show()
