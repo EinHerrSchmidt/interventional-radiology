@@ -15,18 +15,27 @@ class Planner:
         self.model = pyo.AbstractModel()
         self.modelInstance = None
         self.solver = pyo.SolverFactory(solver)
+        self.MPModel = pyo.AbstractModel()
+        self.MPInstance = None
+        self.SPModel = pyo.AbstractModel()
+        self.SPInstance = None
+        self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
+            self.solver.options['mipgap'] = 0.01
+            self.solver.options['emphasis'] = "mip 2"
+        if(solver == "gurobi"):
+            self.solver.options['timelimit'] = timeLimit
+            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            # self.solver.options['threads'] = 10
-            # self.solver.options['heuristics'] = "off"
+            self.solver.options['ratiogap'] = 0.02
+            self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
-            # self.solver.options['feas'] = "off"
-            # self.solver.options['passF'] = 250
-            # self.solver.options['cuts'] = "off"
-            # self.solver.options['ratioGAP'] = 0.05
-            # self.solver.options['preprocess'] = "on"
+            # self.solver.options['feas'] = "on"
+            self.solver.options['cuts'] = "on"
+            self.solver.options['preprocess'] = "on"
             # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
@@ -236,7 +245,7 @@ class StartingMinutePlanner(Planner):
     def end_of_day_rule(model, i, k, t):
         if(model.find_component('xParam') and model.xParam[i, k, t] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
+        return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -254,7 +263,8 @@ class StartingMinutePlanner(Planner):
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        or(model.specialty[i1] != model.specialty[i2])):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
