@@ -1,4 +1,5 @@
 from __future__ import division
+import re
 import time
 import pyomo.environ as pyo
 from pyomo.opt import SolverStatus, TerminationCondition
@@ -19,17 +20,20 @@ class Planner:
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
+            self.solver.options['mipgap'] = 0.01
+            self.solver.options['emphasis'] = "mip 2"
+        if(solver == "gurobi"):
+            self.solver.options['timelimit'] = timeLimit
+            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            self.solver.options['threads'] = 12
-            self.solver.options['heuristicsOnOff'] = "on"
-            self.solver.options['round'] = "on"
-            self.solver.options['feas'] = "on"
-            # self.solver.options['passF'] = 30
+            self.solver.options['ratiogap'] = 0.02
+            self.solver.options['heuristics'] = "on"
+            # self.solver.options['round'] = "on"
+            # self.solver.options['feas'] = "on"
             self.solver.options['cuts'] = "on"
-            # self.solver.options['ratioGAP'] = 0.05
-            # self.solver.options['preprocess'] = "on"
-            self.solver.options['randomc'] = 52876
+            self.solver.options['preprocess'] = "on"
             # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
@@ -156,7 +160,7 @@ class Planner:
             return pyo.Constraint.Skip
         if(model.xParam[i, k, t] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t] + model.bigM[4] * (1 - model.x[i, k, t])
+        return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -184,6 +188,8 @@ class Planner:
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
+        if(model.specialty[i1] != model.specialty[i2]):
+            return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
         if(i1 >= i2):
@@ -336,26 +342,30 @@ class Planner:
         SPBuildingTime = 0
 
         # MP
-        self.fix_MP_x_variables()
-        self.fix_MP_beta_variables()
+        # self.fix_MP_x_variables()
+        # here this should not be needed (we skip directly the related constraints)
+        # self.fix_MP_beta_variables()
         print("Solving MP instance...")
         self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
         print("\nMP instance solved.")
         solverTime += self.solver._last_solve_time
-        # print(self.MPModel.results)
+        MPTimeLimitHit = self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+        resultsAsString = str(self.MPModel.results)
+        MPUpperBound = float(re.search("Upper bound: (\d*\.\d*)", resultsAsString).group(1))
 
         # SP
         SPBuildingTime += self.create_SP_instance(data)
 
         self.fix_SP_x_variables()
         # self.fix_SP_gamma_variables()
-        self.fix_SP_beta_variables()
-        self.fix_SP_y_variables()
-        self.fix_SP_lambda_variables()
+        # self.fix_SP_beta_variables()
+        # self.fix_SP_y_variables()
+        # self.fix_SP_lambda_variables()
         print("Solving SP instance...")
         self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
         print("SP instance solved.")
         solverTime += self.solver._last_solve_time
+        SPTimeLimitHit = self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
 
         statusOk = self.SPModel.results.solver.status == SolverStatus.ok
 
@@ -363,8 +373,11 @@ class Planner:
                     "MPBuildingTime": MPBuildingTime,
                     "SPBuildingTime": SPBuildingTime,
                     "statusOk": statusOk,
-                    "objectiveValue": pyo.value(self.SPInstance.objective),
-                    "iterations": 0}
+                    "MPTimeLimitHit": MPTimeLimitHit,
+                    "SPTimeLimitHit": SPTimeLimitHit,
+                    "MPobjectiveValue": pyo.value(self.MPInstance.objective),
+                    "SPobjectiveValue": pyo.value(self.SPInstance.objective),
+                    "MPUpperBound": MPUpperBound}
 
         print(self.SPModel.results)
         return runInfo
