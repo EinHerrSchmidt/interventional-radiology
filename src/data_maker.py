@@ -1,3 +1,4 @@
+import math
 from scipy.stats import truncnorm
 from scipy.stats import binom
 from scipy.stats import uniform
@@ -300,7 +301,7 @@ class DataMaker:
         covidFlags = dataContainer.asList(dataContainer.covidFlags)
         specialties = dataContainer.asList(dataContainer.specialties)
         ids = dataContainer.asList(dataContainer.ids)
-        totalOperatingTime = sum(operatingTimes)
+        maxOperatingRoomTime = 270
         return {
             None: {
                 'I': {None: dataDescriptor.patients},
@@ -321,11 +322,11 @@ class DataMaker:
                 'specialty': self.create_dictionary_entry(specialties, isTime=False),
                 'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, self.create_dictionary_entry(specialties, isTime=False)),
                 'bigM': {
-                    1: dataDescriptor.patients,
-                    2: totalOperatingTime,
-                    3: totalOperatingTime,
-                    4: totalOperatingTime,
-                    5: totalOperatingTime,
+                    1: math.floor(maxOperatingRoomTime/min(operatingTimes)),
+                    2: maxOperatingRoomTime,
+                    3: maxOperatingRoomTime,
+                    4: maxOperatingRoomTime,
+                    5: maxOperatingRoomTime,
                     6: dataDescriptor.patients
                 }
             }
