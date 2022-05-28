@@ -315,9 +315,6 @@ class Planner:
         worstMPBoundTimeLimitHit = 0
         while True:
             # MP
-            # self.fix_MP_x_variables()
-            # here this should not be needed (we skip directly the related constraints)
-            # self.fix_MP_beta_variables()
             print("Solving MP instance...")
             self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
             print("\nMP instance solved.")
@@ -336,10 +333,6 @@ class Planner:
             overallSPBuildingTime += self.create_SP_instance(data)
 
             self.fix_SP_x_variables()
-            # self.fix_SP_gamma_variables()
-            # self.fix_SP_beta_variables()
-            # self.fix_SP_y_variables()
-            # self.fix_SP_lambda_variables()
             print("Solving SP instance...")
             self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
             print("SP instance solved.")
@@ -413,85 +406,6 @@ class Planner:
                         self.SPInstance.x[i1, k, t].fix(0)
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
-
-    def fix_MP_x_variables(self):
-        print("Fixing x variables for MP...")
-        fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i in self.MPInstance.i:
-                    if(self.MPInstance.specialty[i] == 1 and (k == 3 or k == 4)):
-                        self.MPInstance.x[i, k, t].fix(0)
-                    if(self.MPInstance.specialty[i] == 2 and (k == 1 or k == 2)):
-                        self.MPInstance.x[i, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_SP_beta_variables(self):
-        print("Fixing beta variables for SP...")
-        fixed = 0
-        for i in self.MPInstance.i:
-            for t in self.MPInstance.t:
-                if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 0):
-                    for a in self.MPInstance.alpha:
-                        self.SPInstance.beta[a, i, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " beta variables fixed.")
-
-    def fix_MP_beta_variables(self):
-        print("Fixing beta variables for MP...")
-        fixed = 0
-        for i in self.MPInstance.i:
-            if(self.MPInstance.a[i] == 0):
-                for t in self.MPInstance.t:
-                    for a in self.MPInstance.alpha:
-                        self.MPInstance.beta[a, i, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " beta variables fixed.")
-
-    def fix_SP_gamma_variables(self):
-        print("Fixing gamma variables...")
-        fixed = 0
-        for i1 in self.MPInstance.i:
-            if(sum(round(self.MPInstance.x[i1, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-                self.SPInstance.gamma[i1].fix(0)
-                fixed += 1
-        print(str(fixed) + " gamma variables fixed.")
-
-    def fix_SP_y_variables(self):
-        print("Fixing y variables...")
-        fixed = 0
-        for k in self.SPInstance.k:
-            for t in self.SPInstance.t:
-                for i1 in range(2, self.MPInstance.I + 1):
-                    for i2 in range(1, i1):
-                        if((self.MPInstance.u[i1, i2] == 1 or round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) < 2)):
-                            self.SPInstance.y[i1, i2, k, t].fix(1)
-                            self.SPInstance.y[i2, i1, k, t].fix(0)
-                            fixed += 2
-        print(str(fixed) + " y variables fixed.")
-
-    def fix_SP_lambda_variables(self):
-        print("Fixing lambda variables for SP...")
-        fixed = 0
-        for t in self.MPInstance.t:
-            for i1 in range(2, self.MPInstance.I + 1):
-                for i2 in range(1, i1):
-                    i1AllDay = 0
-                    i2AllDay = 0
-                    for k in self.MPInstance.k:
-                        if(round(self.MPInstance.x[i1, k, t].value) + round(self.MPInstance.x[i2, k, t].value) == 2):
-                            self.SPInstance.Lambda[i1, i2, t].fix(0)
-                            self.SPInstance.Lambda[i2, i1, t].fix(1)
-                            fixed += 2
-                            break
-                        i1AllDay += round(self.MPInstance.x[i1, k, t].value)
-                        i2AllDay += round(self.MPInstance.x[i2, k, t].value)
-                    if(i1AllDay == 0 or i2AllDay == 0 or not (self.MPInstance.a[i1] == 1 and self.MPInstance.a[i2] == 1)):
-                        self.SPInstance.Lambda[i1, i2, t].fix(1)
-                        self.SPInstance.Lambda[i2, i1, t].fix(0)
-                        fixed += 2
-        print(str(fixed) + " lambda variables fixed.")
 
     def extract_solution(self):
         if(self.SPModel.results.solver.status != SolverStatus.ok):
