@@ -13,8 +13,6 @@ class Planner:
     FIXED = 2
 
     def __init__(self, timeLimit, solver):
-        self.LBPModel = pyo.AbstractModel()
-        self.LBPInstance = None
         self.MPModel = pyo.AbstractModel()
         self.MPInstance = None
         self.SPModel = pyo.AbstractModel()
@@ -291,11 +289,6 @@ class Planner:
             self.SPModel.t,
             rule=self.exclusive_precedence_rule)
 
-    def define_maximum_anesthesia_patients_lb_constraint(self):
-        self.LBPModel.maximum_anesthesia_patients_lb_constraint = pyo.Constraint(
-            self.LBPModel.t,
-            rule=self.maximum_anesthesia_patients_lb_constraint_rule)
-
     def define_common_components(self, model):
         self.define_sets(model)
         self.define_x_variables(model)
@@ -309,17 +302,6 @@ class Planner:
         self.define_anesthetists_availability(model)
         self.define_anesthetist_assignment_constraint(model)
         self.define_anesthetist_time_constraint(model)
-
-    def define_LBP(self):
-        self.define_sets(self.LBPModel)
-        self.define_x_variables(self.LBPModel)
-        self.define_parameters(self.LBPModel)
-        self.define_single_surgery_constraints(self.LBPModel)
-        self.define_surgery_time_constraints(self.LBPModel)
-        self.define_specialty_assignment_constraints(self.LBPModel)
-        self.define_anesthetists_number_param(self.LBPModel)
-        self.define_maximum_anesthesia_patients_lb_constraint()
-        self.define_objective(self.LBPModel)
 
     def define_MP(self):
         self.define_common_components(self.MPModel)
@@ -344,26 +326,13 @@ class Planner:
         self.define_objective(self.SPModel)
 
     def solve_model(self, data):
-        self.define_LBP()
         self.define_MP()
         self.define_SP()
-        LBPBuildingTime = self.create_LBP_instance(data)
-        LBPSolverTime = 0
-
-        print("Solving LBP instance...")
-        self.LBPModel.results = self.solver.solve(self.LBPInstance, tee=True)
-        print("\LBP instance solved.")
-        LBPSolverTime = self.solver._last_solve_time
 
         MPBuildingTime = self.create_MP_instance(data)
-
-        solverTime = 0
         SPBuildingTime = 0
 
         # MP
-        # self.fix_MP_x_variables()
-        # here this should not be needed (we skip directly the related constraints)
-        # self.fix_MP_beta_variables()
         print("Solving MP instance...")
         self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
         print("\nMP instance solved.")
@@ -376,15 +345,11 @@ class Planner:
         SPBuildingTime += self.create_SP_instance(data)
 
         self.fix_SP_x_variables()
-        # self.fix_SP_gamma_variables()
-        # self.fix_SP_beta_variables()
-        # self.fix_SP_y_variables()
-        # self.fix_SP_lambda_variables()
         print("Solving SP instance...")
         self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
         print("SP instance solved.")
         SPSolverTime = self.solver._last_solve_time
-        SPTimeLimitHit = self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+        SPTimeLimitHit = self.SPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
 
         statusOk = self.SPModel.results.solver.status == SolverStatus.ok
 
@@ -397,9 +362,8 @@ class Planner:
                     "SPTimeLimitHit": SPTimeLimitHit,
                     "MPobjectiveValue": pyo.value(self.MPInstance.objective),
                     "SPobjectiveValue": pyo.value(self.SPInstance.objective),
-                    "MPUpperBound": MPUpperBound,
-                    "LBPObjectiveValue": pyo.value(self.LBPInstance.objective),
-                    "LBPSolverTime": LBPSolverTime}
+                    "MPUpperBound": MPUpperBound
+                    }
 
         print(self.SPModel.results)
         return runInfo
@@ -427,14 +391,6 @@ class Planner:
                             xParamDict[(i, k, t)] = 0
         data[None]['xParam'] = xParamDict
         data[None]['status'] = statusDict
-
-    def create_LBP_instance(self, data):
-        print("Creating LBP instance...")
-        t = time.time()
-        self.LBPInstance = self.LBPModel.create_instance(data)
-        elapsed = (time.time() - t)
-        print("LBP instance created in " + str(round(elapsed, 2)) + "s")
-        return elapsed
 
     def create_MP_instance(self, data):
         print("Creating MP instance...")
