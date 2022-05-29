@@ -186,12 +186,6 @@ class Planner:
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     @staticmethod
-    def maximum_anesthesia_patients_lb_constraint_rule(model, t):
-        if(sum(model.a[i] for i in model.i) == 0):
-            return pyo.Constraint.Skip
-        return (sum(model.a[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A)
-
-    @staticmethod
     def maximum_anesthesia_time_constraint_rule(model, t):
         if(sum(model.a[i] for i in model.i) == 0):
             return pyo.Constraint.Skip
