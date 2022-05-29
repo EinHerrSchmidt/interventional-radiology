@@ -2,9 +2,12 @@ import logging
 import time
 from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-from LBBD_planner import Planner
+import LBBD_planner as lbbd
+import LBBD_planner_3_phase as lbbdv
 from utils import SolutionVisualizer
 if __name__ == '__main__':
+
+    variant = True
 
     solvers = ["cplex"]
     size = [60, 120, 180]
@@ -21,18 +24,13 @@ if __name__ == '__main__':
                 for a in anesthesia:
                     for at in anesthetists:
 
-                        planner = Planner(timeLimit=300, solver=solver)
-                        dataDescriptor = DataDescriptor()
+                        planner = None
+                        if(variant):
+                            planner = lbbdv.Planner(timeLimit=300, solver=solver)
+                        else:
+                            planner = lbbd.Planner(timeLimit=300, solver=solver)
 
-                        # complicated instance
-                        # dataDescriptor.patients = 120
-                        # dataDescriptor.days = 5
-                        # dataDescriptor.anesthetists = 2
-                        # dataDescriptor.covidFrequence = 0.8
-                        # dataDescriptor.anesthesiaFrequence = 0.7
-                        # dataDescriptor.specialtyBalance = 0.17
-                        # dataDescriptor.operatingDayDuration = 180
-                        # dataDescriptor.anesthesiaTime = 180
+                        dataDescriptor = DataDescriptor()
 
                         dataDescriptor.patients = s
                         dataDescriptor.days = 5
@@ -78,8 +76,8 @@ if __name__ == '__main__':
                                         + str(runInfo["worstMPBoundTimeLimitHit"]) + "\t"
                                         + str(runInfo["iterations"]))
 
-                        solution = planner.extract_solution()
+                        # solution = planner.extract_solution()
 
-                        sv = SolutionVisualizer()
-                        sv.print_solution(solution)
+                        # sv = SolutionVisualizer()
+                        # sv.print_solution(solution)
                         # sv.plot_graph(solution)

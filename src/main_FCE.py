@@ -2,9 +2,12 @@ import logging
 import time
 from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-from fast_complete_heuristic import Planner
+import fast_complete_heuristic as fce
+import fast_complete_heuristic_variant as fcev
 from utils import SolutionVisualizer
 if __name__ == '__main__':
+
+    variant = True
 
     solvers = ["cplex"]
     size = [60, 120, 180]
@@ -13,26 +16,21 @@ if __name__ == '__main__':
     anesthetists = [1, 2]
 
     logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit")
+    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tObjective_Function_LB")
 
     for solver in solvers:
         for s in size:
             for c in covid:
                 for a in anesthesia:
                     for at in anesthetists:
+                        
+                        planner = None
+                        if(variant):
+                            planner = fcev.Planner(timeLimit=300, solver=solver)
+                        else:
+                            planner = fce.Planner(timeLimit=300, solver=solver)
 
-                        planner = Planner(timeLimit=300, solver=solver)
                         dataDescriptor = DataDescriptor()
-
-                        # complicated instance
-                        # dataDescriptor.patients = 120
-                        # dataDescriptor.days = 5
-                        # dataDescriptor.anesthetists = 2
-                        # dataDescriptor.covidFrequence = 0.8
-                        # dataDescriptor.anesthesiaFrequence = 0.7
-                        # dataDescriptor.specialtyBalance = 0.17
-                        # dataDescriptor.operatingDayDuration = 180
-                        # dataDescriptor.anesthesiaTime = 180
 
                         dataDescriptor.patients = s
                         dataDescriptor.days = 5
@@ -71,13 +69,15 @@ if __name__ == '__main__':
                                         + str(runInfo["MPBuildingTime"]) + "\t"
                                         + str(runInfo["SPBuildingTime"]) + "\t"
                                         + str(round(elapsed, 2)) + "\t"
-                                        + str(runInfo["solutionTime"]) + "\t"
+                                        + str(runInfo["MPSolverTime"]) + "\t"
+                                        + str(runInfo["SPSolverTime"]) + "\t"
                                         + str(runInfo["statusOk"]) + "\t"
                                         + str(runInfo["MPobjectiveValue"]) + "\t"
                                         + str(runInfo["SPobjectiveValue"]) + "\t"
                                         + str(runInfo["MPUpperBound"]) + "\t"
                                         + str(runInfo["MPTimeLimitHit"]) + "\t"
-                                        + str(runInfo["SPTimeLimitHit"]))
+                                        + str(runInfo["SPTimeLimitHit"]) + "\t"
+                                        + str(runInfo["objectiveFunctionLB"]))
 
                         solution = planner.extract_solution()
 
