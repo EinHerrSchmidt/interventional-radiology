@@ -46,7 +46,7 @@ if __name__ == '__main__':
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 1.0
+    dataDescriptor.anesthesiaFrequence = 0.8
     dataDescriptor.specialtyBalance = 0.17
     dataDescriptor.operatingDayDuration = 270
     dataDescriptor.anesthesiaTime = 270
@@ -102,8 +102,8 @@ if __name__ == '__main__':
                          0,  # used to track to what anesthetist the patient is assigned
                          i,
                          dataDictionary[None]["c"][i]])
-    # sort patients by r_i/p_i (most bang for the buck)
-    patients.sort(key=lambda x: x[0]/x[1])
+    # sort patients by r_i
+    patients.sort(key=lambda x: x[0])
 
     dict = {}
     # fill rooms, for each day
@@ -130,8 +130,8 @@ if __name__ == '__main__':
                 gain = 0
                 anesthetistTime = dataDictionary[None]["An"][(a, t)]
                 for patient in dict[(k, t)]:
-                    # if patient has operating time lower than anesthetist's residual time AND patient is not yet assigned an anesthetist
-                    if(anesthetistTime >= patient[1] and patient[4] == 0):
+                    # if patient has operating time lower than anesthetist's residual time AND patient is not yet assigned an anesthetist AND patient needs anesthesia
+                    if(anesthetistTime >= patient[1] and patient[4] == 0 and patient[3] == 1):
                         anesthetistTime = anesthetistTime - patient[1]
                         gain = gain + patient[0]
                         patient[4] = a
@@ -175,10 +175,10 @@ if __name__ == '__main__':
                                         # check if we can swap
                                         if(k2Patient[3] == 0 and k2Patient[1] + k2ResidualTime >= k1Patient[1] and k1Patient[1] + k1ResidualTime >= k2Patient[1]
                                             and anesthetistResidualTime >= k1Patient[1]):
-                                            dict[(k1, t)].remove(k1Patient)
+                                            dict[(k1, t)] = [x for x in dict[(k1, t)] if x[5] != k1Patient[5]]
                                             dict[(k1, t)].append(k2Patient)
                                             k1Patient[4] = a
-                                            dict[(k2, t)].remove(k2Patient)
+                                            dict[(k2, t)] = [x for x in dict[(k2, t)] if x[5] != k2Patient[5]]
                                             dict[(k2, t)].append(k1Patient)
                                             mustDiscard = False
                                             break
