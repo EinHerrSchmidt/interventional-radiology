@@ -339,9 +339,6 @@ class Planner:
         MPBuildingTime = self.create_MP_instance(data)
 
         # MP
-        # self.fix_MP_x_variables()
-        # here this should not be needed (we skip directly the related constraints)
-        # self.fix_MP_beta_variables()
         print("Solving MP instance...")
         self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
         print("\nMP instance solved.")
