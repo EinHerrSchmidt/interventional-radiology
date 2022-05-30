@@ -8,7 +8,7 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, timeLimit, solver):
+    def __init__(self, timeLimit, gap, solver):
         self.MPModel = pyo.AbstractModel()
         self.MPInstance = None
         self.SPModel = pyo.AbstractModel()
@@ -16,15 +16,15 @@ class Planner:
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipgap'] = gap
             self.solver.options['emphasis'] = "mip 2"
         if(solver == "gurobi"):
             self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipgap'] = gap
             self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            self.solver.options['ratiogap'] = 0.02
+            self.solver.options['ratiogap'] = gap
             self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
