@@ -11,7 +11,7 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, timeLimit, solver):
+    def __init__(self, timeLimit, gap, solver):
         self.model = pyo.AbstractModel()
         self.modelInstance = None
         self.solver = pyo.SolverFactory(solver)
@@ -22,15 +22,15 @@ class Planner:
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipgap'] = gap
             self.solver.options['emphasis'] = "mip 2"
         if(solver == "gurobi"):
             self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = 0.01
+            self.solver.options['mipgap'] = gap
             self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
             self.solver.options['seconds'] = timeLimit
-            self.solver.options['ratiogap'] = 0.02
+            self.solver.options['ratiogap'] = gap
             self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
@@ -115,13 +115,13 @@ class Planner:
             sense=pyo.maximize)
 
     def create_model_instance(self, data):
-        print("Creating model instance for phase one...")
+        print("Creating model instance...")
         t = time.time()
         self.modelInstance = self.model.create_instance(data)
         elapsed = (time.time() - t)
-        print("Model instance for phase one created in " + str(round(elapsed, 2)) + "s")
+        print("Model instance created in " + str(round(elapsed, 2)) + "s")
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Model instance for phase one created in " + str(round(elapsed, 2)) + "s")
+        logging.info("Model instance created in " + str(round(elapsed, 2)) + "s")
 
     def common_extract_solution(self, modelInstance):
         dict = {}
@@ -367,17 +367,13 @@ class StartingMinutePlanner(Planner):
                             modelInstance.y[i1, i2, k, t].fix(1)
                             modelInstance.y[i2, i1, k, t].fix(0)
                             fixed += 2
-                        if(isinstance(self, TwoPhaseStartingMinutePlanner) and (round(modelInstance.x[i1, k, t].value) + round(modelInstance.x[i2, k, t].value) < 2)):
-                            modelInstance.y[i1, i2, k, t].fix(0)
-                            modelInstance.y[i2, i1, k, t].fix(1)
-                            fixed += 1
         print(str(fixed) + " y variables fixed.")
 
 
 class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
 
-    def __init__(self, timeLimit, solver):
-        super().__init__(timeLimit, solver)
+    def __init__(self, timeLimit, gap, solver):
+        super().__init__(timeLimit, gap, solver)
         self.define_model()
 
     def define_model(self):
@@ -447,163 +443,6 @@ class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
 
     def extract_solution(self):
         return super().common_extract_solution(self.modelInstance)
-
-
-class TwoPhaseStartingMinutePlanner(StartingMinutePlanner):
-
-    def __init__(self, timeLimit, solver):
-        super().__init__(timeLimit, solver)
-        self.modelInstancePhaseTwo = None
-        self.define_model()
-
-    def define_model(self):
-        self.build_common_model()
-        self.define_variables_and_params_phase_one()
-        self.define_constraints_phase_one()
-        self.define_objective()
-
-    def define_variables_and_params_phase_one(self):
-        self.define_anesthetists_number_param()
-        self.define_anesthetists_range_set()
-        self.define_beta_variables()
-        self.define_anesthetists_availability()
-
-    def define_variables_and_params_phase_two(self):
-        self.define_lambda_variables()
-        self.define_y_variables()
-        self.define_gamma_variables()
-        self.model.xParam = pyo.Param(self.model.i,
-                                      self.model.k,
-                                      self.model.t)
-
-    def define_constraints_phase_one(self):
-        self.define_anesthetist_assignment_constraint()
-        self.define_anesthetist_time_constraint()
-
-    def define_constraints_phase_two(self):
-        self.define_anesthetist_no_overlap_constraint()
-        self.define_lambda_constraint()
-        self.define_end_of_day_constraint()
-        self.define_priority_constraint()
-        self.define_precedence_constraint()
-        self.define_exclusive_precedence_constraint()
-
-    def solve_model(self, data):
-        # phase one
-        self.create_model_instance(data)
-        print("Solving phase one model instance...")
-        self.model.results = self.solver.solve(self.modelInstance, tee=True)
-        print("\nPhase one model instance solved.")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Model instance for phase one solved in " + str(round(self.solver._last_solve_time, 2)) + "s")
-        logging.info("Objective value for phase one: " + str(pyo.value(self.modelInstance.objective)))
-        print(self.model.results)
-
-        # phase two
-        self.extend_model()
-        self.extend_data(data)
-        self.create_model_instance_phase_two(data)
-        self.fix_x_variables()
-        self.fix_beta_variables()
-        self.fix_y_variables(self.modelInstancePhaseTwo)
-        self.fix_lambda_variables()
-        print("Solving phase two model instance...")
-        self.model.results = self.solver.solve(self.modelInstancePhaseTwo, tee=True)
-        print("Phase two model instance solved.")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Model instance for phase two solved in " + str(round(self.solver._last_solve_time, 2)) + "s")
-        logging.info("Objective value for phase two: " + str(pyo.value(self.modelInstancePhaseTwo.objective)))
-        print(self.model.results)
-
-    def extend_model(self):
-        print("Extending model for phase two...")
-        self.define_variables_and_params_phase_two()
-        self.define_constraints_phase_two()
-        print("Model extended for phase two.")
-
-    def extend_data(self, data):
-        dict = {}
-        for i in range(1, self.modelInstance.I + 1):
-            for k in range(1, self.modelInstance.K + 1):
-                for t in range(1, self.modelInstance.T + 1):
-                    if(round(self.modelInstance.x[i, k, t].value) == 1):
-                        dict[(i, k, t)] = 1
-                    else:
-                        dict[(i, k, t)] = 0
-        data[None]['xParam'] = dict
-
-    def create_model_instance_phase_two(self, data):
-        print("Creating model instance for phase two...")
-        t = time.time()
-        self.modelInstancePhaseTwo = self.model.create_instance(data)
-        elapsed = (time.time() - t)
-        print("Model instance for phase two created in " + str(round(elapsed, 2)) + "s")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Model instance for phase two created in " + str(round(elapsed, 2)) + "s")
-
-    def fix_x_variables(self):
-        print("Fixing x variables for phase two...")
-        fixed = 0
-        for k in self.modelInstance.k:
-            for t in self.modelInstance.t:
-                for i1 in self.modelInstance.i:
-                    if(round(self.modelInstance.x[i1, k, t].value) == 1):
-                        self.modelInstancePhaseTwo.x[i1, k, t].fix(1)
-                    else:
-                        self.modelInstancePhaseTwo.x[i1, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_beta_variables(self):
-        print("Fixing beta variables for phase two...")
-        fixed = 0
-        for i in self.modelInstance.i:
-            for t in self.modelInstance.t:
-                if(sum(round(self.modelInstance.x[i, k, t].value) for k in self.modelInstance.k) == 0):
-                    for a in self.modelInstance.alpha:
-                        self.modelInstancePhaseTwo.beta[a, i, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " beta variables fixed.")
-
-    def fix_gamma_variables(self):
-        print("Fixing gamma variables for phase two...")
-        fixed = 0
-        for i1 in self.modelInstance.i:
-            if(sum(round(self.modelInstance.x[i1, k, t].value) for k in self.modelInstance.k for t in self.modelInstance.t) == 0):
-                self.modelInstancePhaseTwo.gamma[i1].fix(0)
-                fixed += 1
-        print(str(fixed) + " gamma variables fixed.")
-
-    def fix_lambda_variables(self):
-        print("Fixing lambda variables for phase one...")
-        fixed = 0
-        for t in self.modelInstance.t:
-            for i1 in range(2, self.modelInstance.I + 1):
-                for i2 in range(1, i1):
-                    i1AllDay = 0
-                    i2AllDay = 0
-                    for k in self.modelInstance.k:
-                        if(round(self.modelInstance.x[i1, k, t].value) + round(self.modelInstance.x[i2, k, t].value) == 2):
-                            self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(0)
-                            self.modelInstancePhaseTwo.Lambda[i2, i1, t].fix(1)
-                            fixed += 2
-                            break
-                        i1AllDay += round(self.modelInstance.x[i1, k, t].value)
-                        i2AllDay += round(self.modelInstance.x[i2, k, t].value)
-                    if(i1AllDay == 0 or i2AllDay == 0 or not (self.modelInstance.a[i1] == 1 and self.modelInstance.a[i2] == 1)):
-                        self.modelInstancePhaseTwo.Lambda[i1, i2, t].fix(1)
-                        self.modelInstancePhaseTwo.Lambda[i2, i1, t].fix(0)
-                        fixed += 2
-        print(str(fixed) + " lambda variables fixed.")
-
-    def print_solution(self):
-        super().common_print_solution(self.modelInstancePhaseTwo)
-
-    def plot_graph(self):
-        super().plot_graph(self.modelInstancePhaseTwo)
-
-    def extract_solution(self):
-        return super().common_extract_solution(self.modelInstancePhaseTwo)
 
 
 class SimpleOrderingPlanner(Planner):
