@@ -1,19 +1,18 @@
-
 import unittest
 
-from LBBD_planner_3_phase import Planner
-from test.test_utils import build_data_dictionary
-from test.common_tests import TestCommon
+from planners import SinglePhaseStartingMinutePlanner
+from test.common import build_data_dictionary
+from test.common import TestCommon
 
 
-class Test3PhaseLBBD(TestCommon):
+class TestSM(TestCommon):
 
     @classmethod
     def setUpClass(self):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = SinglePhaseStartingMinutePlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -40,6 +39,7 @@ class Test3PhaseLBBD(TestCommon):
 
     def test_anesthetist_assignment(self):
         self.anesthetist_assignment()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,45 +1,31 @@
 import unittest
-
-from numpy import size
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
-from planners import SinglePhaseStartingMinutePlanner
 
 
+def build_data_dictionary():
+    dataDescriptor = DataDescriptor()
+    dataDescriptor.patients = 80
+    dataDescriptor.days = 5
+    dataDescriptor.anesthetists = 2
+    dataDescriptor.covidFrequence = 0.5
+    dataDescriptor.anesthesiaFrequence = 0.5
+    dataDescriptor.specialtyBalance = 0.17
+    dataDescriptor.operatingDayDuration = 270
+    dataDescriptor.anesthesiaTime = 270
+    dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
+                                                                    high=120,
+                                                                    mean=60,
+                                                                    stdDev=10)
+    dataMaker = DataMaker(seed=52876)
+    dataContainer = dataMaker.create_data_container(dataDescriptor)
+    return dataMaker.create_data_dictionary(dataContainer, dataDescriptor)
 
-class TestStartTimeModel(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(self):
-        planner = SinglePhaseStartingMinutePlanner(timeLimit=900,
-                               solver="cplex")
+class TestCommon(unittest.TestCase):
 
-        self.dataDescriptor = DataDescriptor()
-        self.dataDescriptor.patients = 100
-        self.dataDescriptor.days = 5
-        self.dataDescriptor.anesthetists = 2
-        self.dataDescriptor.covidFrequence = 0.5
-        self.dataDescriptor.anesthesiaFrequence = 0.2
-        self.dataDescriptor.specialtyBalance = 0.17
-        self.dataDescriptor.operatingDayDuration = 480
-        self.dataDescriptor.anesthesiaTime = 480
-        self.dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
-                                                                                  high=120,
-                                                                                  mean=60,
-                                                                                  stdDev=20)
-        self.dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
-                                                                             high=120,
-                                                                             mean=60,
-                                                                             stdDev=10)
-        dataMaker = DataMaker(seed=52876)
-        dataContainer = dataMaker.create_data_container(self.dataDescriptor)
-        dataDictionary = dataMaker.create_data_dictionary(dataContainer, self.dataDescriptor)
-
-        planner.solve_model(dataDictionary)
-        self.solution = planner.extract_solution()
-
-    def test_non_overlapping_patients(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def non_overlapping_patients(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         for k in range(1, K + 1):
             for t in range(1, T + 1):
                 patients = self.solution[(k, t)]
@@ -52,9 +38,9 @@ class TestStartTimeModel(unittest.TestCase):
                             self.assertTrue((patients[i1].order + patients[i1].operatingTime <= patients[i2].order or patients[i2].order + patients[i2].operatingTime <= patients[i1].order)
                                             and not (patients[i1].order + patients[i1].operatingTime <= patients[i2].order and patients[i2].order + patients[i2].operatingTime <= patients[i1].order))
 
-    def test_non_overlapping_anesthetists(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def non_overlapping_anesthetists(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         for t in range(1, T + 1):
             for k1 in range(1, K + 1):
                 for k2 in range(1, K + 1):
@@ -72,9 +58,24 @@ class TestStartTimeModel(unittest.TestCase):
                                 self.assertTrue((k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order or k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order)
                                  and not (k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order and k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order))
 
-    def test_surgery_time_constraint(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def priority_constraints(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
+        sorted = True
+        for k in range(1, K + 1):
+            for t in range(1, T + 1):
+                patients = self.solution[(k, t)]
+                patientsNumber = len(patients)
+                if(patientsNumber <= 1):
+                    continue
+                for i in range(1, patientsNumber):
+                    if(patients[i].covid < patients[i - 1].covid):
+                        sorted = False
+        self.assertTrue(sorted)
+
+    def surgery_time_constraint(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         for k in range(1, K + 1):
             for t in range(1, T + 1):
                 patients = self.solution[(k, t)]
@@ -83,11 +84,11 @@ class TestStartTimeModel(unittest.TestCase):
                     continue
                 totalOperatingTime = sum(
                     map(lambda p: p.operatingTime, patients))
-                self.assertTrue(totalOperatingTime <= self.dataDescriptor.operatingDayDuration)
+                self.assertTrue(totalOperatingTime <= self.dataDictionary[None]["s"][(k, t)])
 
-    def test_end_of_day_constraint(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def end_of_day_constraint(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         for k in range(1, K + 1):
             for t in range(1, T + 1):
                 patients = self.solution[(k, t)]
@@ -95,12 +96,12 @@ class TestStartTimeModel(unittest.TestCase):
                 if(patientsNumber == 0):
                     continue
                 for i in range(0, patientsNumber):
-                    self.assertTrue(patients[i].order + patients[i].operatingTime <= self.dataDescriptor.operatingDayDuration)
+                    self.assertTrue(patients[i].order + patients[i].operatingTime <= self.dataDictionary[None]["s"][(k, t)])
 
-    def test_anesthesia_total_time_constraint(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
-        A = self.dataDescriptor.anesthetists
+    def anesthesia_total_time_constraint(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
+        A = self.dataDictionary[None]["A"][None]
         for t in range(1, T + 1):
             patients = []
             for k in range(1, K + 1):
@@ -110,11 +111,11 @@ class TestStartTimeModel(unittest.TestCase):
                     filter(lambda p: p.anesthetist and p.anesthetist == a, patients))
                 if(len(patientsWithAnesthetist) == 0):
                     continue
-                self.assertTrue(sum(map(lambda p: p.operatingTime, patientsWithAnesthetist)) <= self.dataDescriptor.anesthesiaTime)
+                self.assertTrue(sum(map(lambda p: p.operatingTime, patientsWithAnesthetist)) <= self.dataDictionary[None]["An"][(a, t)])
 
-    def test_single_surgery(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def single_surgery(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         patients = []
         for k in range(1, K + 1):
             for t in range(1, T + 1):
@@ -122,9 +123,9 @@ class TestStartTimeModel(unittest.TestCase):
         patientIds = list(map(lambda p : p.id, patients))
         self.assertTrue(len(patientIds) == len(set(patientIds)))
 
-    def test_anesthetist_assignment(self):
-        K = self.dataDescriptor.operatingRooms
-        T = self.dataDescriptor.days
+    def anesthetist_assignment(self):
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
         for k in range(1, K + 1):
             for t in range(1, T + 1):
                 for patient in self.solution[(k, t)]:
@@ -132,6 +133,3 @@ class TestStartTimeModel(unittest.TestCase):
                         self.assertTrue(patient.anesthetist > 0)
                     else:
                         self.assertTrue(patient.anesthetist == 0)
-
-if __name__ == '__main__':
-    unittest.main()
