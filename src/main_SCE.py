@@ -16,7 +16,7 @@ if __name__ == '__main__':
     anesthetists = [1, 2]
 
     logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tObjective_Function_LB")
+    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit")
 
     for solver in solvers:
         for s in size:
@@ -76,8 +76,7 @@ if __name__ == '__main__':
                                         + str(runInfo["SPobjectiveValue"]) + "\t"
                                         + str(runInfo["MPUpperBound"]) + "\t"
                                         + str(runInfo["MPTimeLimitHit"]) + "\t"
-                                        + str(runInfo["SPTimeLimitHit"]) + "\t"
-                                        + str(runInfo["objectiveFunctionLB"]))
+                                        + str(runInfo["SPTimeLimitHit"]))
 
                         solution = planner.extract_solution()
 
