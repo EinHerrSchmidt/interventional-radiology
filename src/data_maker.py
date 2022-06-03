@@ -352,6 +352,7 @@ class DataMaker:
                           anesthetist="N/A",
                           order="N/A"
                           ))
+        print("\n")
 
     def create_data_dictionary_real_data(self, dataContainer: DataContainer, dataDescriptor: DataDescriptor):
         operatingRoomTimes = dataContainer.operatingRoomTimes

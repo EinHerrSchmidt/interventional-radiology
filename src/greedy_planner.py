@@ -3,11 +3,7 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, dataDictionary):
-        self.dataDictionary = dataDictionary
-        self.create_room_specialty_map()
-        self.create_room_anesthetist_map()
-        self.create_patients_list()
+    def __init__(self):
         self.solution = {}
 
     def create_room_specialty_map(self):
@@ -150,13 +146,17 @@ class Planner:
                 patients.sort(key=lambda x: x.order)
                 self.solution[(k, t)] = patients
 
-    def compute_solution(self):
+    def solve_model(self, dataDictionary):
+        self.dataDictionary = dataDictionary
+        self.create_room_specialty_map()
+        self.create_room_anesthetist_map()
+        self.create_patients_list()
+
         self.fill_rooms()
         self.assign_anesthetists()
         self.swap_anesthesia_patients()
         self.fill_discarded_slots()
         self.compute_patients_order()
-        return self.solution
 
     def compute_objective_value(self):
         value = 0
@@ -165,3 +165,6 @@ class Planner:
                 for p in self.solution[(k, t)]:
                     value = value + p.priority
         return value
+
+    def extract_solution(self):
+        return self.solution

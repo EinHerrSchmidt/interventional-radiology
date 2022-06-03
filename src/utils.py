@@ -7,6 +7,18 @@ class SolutionVisualizer:
     def __init__(self):
         pass
 
+    def compute_solution_value(self, solution):
+        KT = max(solution.keys())
+        K = KT[0]
+        T = KT[1]
+
+        value = 0
+        for t in range(1, T + 1):
+            for k in range(1, K + 1):
+                for patient in solution[(k, t)]:
+                    value = value + patient.priority
+        return value
+
     def print_solution(self, solution):
         if(solution is None):
             print("No solution was found!")
@@ -16,10 +28,14 @@ class SolutionVisualizer:
         K = KT[0]
         T = KT[1]
 
+        print("Operated patients, for each day and for each room:\n")
+
         operatedPatients = 0
         for t in range(1, T + 1):
             for k in range(1, K + 1):
-                print("Day: " + str(t) + "; Operating Room: S" + str(k) + "\n")
+                print("Day: " + str(t) + "; Operating Room: S" + str(k))
+                if(len(solution[(k, t)]) == 0):
+                    print("---")
                 for patient in solution[(k, t)]:
                     print(patient)
                     operatedPatients += 1
