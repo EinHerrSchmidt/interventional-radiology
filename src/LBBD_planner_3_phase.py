@@ -359,7 +359,7 @@ class Planner:
             print("\nMP instance solved.")
             solverTime += self.solver._last_solve_time
             MPTimeLimitHit = MPTimeLimitHit or self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
-            print(float(re.search("Upper bound: (\d*.\d*)", str(self.MPModel.results)).group(1)))
+            print(float(re.search("Upper bound: -*(\d*.\d*)", str(self.MPModel.results)).group(1)))
 
             IPBuildingTime = self.create_IP_instance(data)
             self.fix_IP_x_variables()

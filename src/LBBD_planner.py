@@ -325,7 +325,7 @@ class Planner:
             # how bad our solution can be, given that time limit was hit at least once
             if(MPTimeLimitHit):
                 MPresultsAsString = str(self.MPModel.results)
-                worstMPBoundCandidate = float(re.search("Upper bound: (\d*.\d*)", MPresultsAsString).group(1))
+                worstMPBoundCandidate = float(re.search("Upper bound: -*(\d*.\d*)", MPresultsAsString).group(1))
                 if(worstMPBoundCandidate > worstMPBoundTimeLimitHit):
                     worstMPBoundTimeLimitHit = worstMPBoundCandidate
 

@@ -2,6 +2,8 @@ import sys
 import threading
 from tkinter import *
 from tkinter.ttk import *
+
+from click import command
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 import fast_complete_heuristic as fce
 import fast_complete_heuristic_variant as fcev
@@ -94,6 +96,12 @@ class MiniGUI(object):
         self.textBox.delete(1.0, END)
         self.textBox.config(state=NORMAL)
 
+    def manage_solver(self, arg):
+        if(self.selectedMethod.get() == "greedy"):
+            self.solversComboBox.config(state="disabled")
+        else:
+            self.solversComboBox.config(state="readonly")
+
 
     def t_main(self):
         thread = threading.Thread(target=self.main, args=[])
@@ -127,6 +135,12 @@ class MiniGUI(object):
             planner = fce.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         elif(self.selectedMethod.get() == "SCE"):
             planner = sce.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+        elif(self.selectedMethod.get() == "LBBD - 3 Phase Variant"):
+            planner = lbbd3p.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+        elif(self.selectedMethod.get() == "FCE - Variant"):
+            planner = fcev.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+        elif(self.selectedMethod.get() == "SCE - Variant"):
+            planner = scev.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         else:
             planner = greedy.Planner()
 
@@ -179,7 +193,7 @@ class MiniGUI(object):
         # solver selection combo
         self.selectedSolver = StringVar()
         self.selectedSolver.set("Select solver")
-        self.solvers = ["cplex", "gurobi", "cbc"]
+        self.solvers = ["cplex", "cbc"]
         self.solversComboBox = Combobox(master=self.parametersFrame,
                                         textvariable=self.selectedSolver,
                                         values=self.solvers,
@@ -197,12 +211,13 @@ class MiniGUI(object):
 
         # method selection combo
         self.selectedMethod = StringVar()
-        self.selectedMethod.set("Select resolution method")
-        self.methods = ["greedy", "FCE", "SCE", "LBBD"]
+        self.selectedMethod.set("Select method")
+        self.methods = ["greedy", "FCE", "FCE - Variant", "SCE", "SCE - Variant", "LBBD", "LBBD - 3 Phase Variant"]
         self.methodsComboBox = Combobox(master=self.parametersFrame,
                                         textvariable=self.selectedMethod,
                                         values=self.methods,
                                         state="readonly")
+        self.methodsComboBox.bind("<<ComboboxSelected>>", self.manage_solver)
         self.methodsComboBox.pack()
 
         # run button

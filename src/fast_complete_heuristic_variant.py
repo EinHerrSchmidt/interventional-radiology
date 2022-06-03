@@ -356,8 +356,9 @@ class Planner:
         print("\nMP instance solved.")
         MPSolverTime = self.solver._last_solve_time
         MPTimeLimitHit = self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+        print(self.MPModel.results)
         resultsAsString = str(self.MPModel.results)
-        MPUpperBound = float(re.search("Upper bound: (\d*\.\d*)", resultsAsString).group(1))
+        MPUpperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
         # SP
         SPBuildingTime = self.create_SP_instance(data)
