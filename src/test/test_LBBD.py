@@ -13,9 +13,12 @@ class TestLBBDStandard(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = LBBD.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = LBBD.Planner(timeLimit=900, gap=0.01, iterationsCap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
+
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
 
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()
@@ -49,9 +52,12 @@ class TestLBBDVariant(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = LBBDV.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = LBBDV.Planner(timeLimit=900, gap=0.01, iterationsCap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
+
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
 
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()

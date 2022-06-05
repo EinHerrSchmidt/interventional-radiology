@@ -23,6 +23,15 @@ def build_data_dictionary():
 
 class TestCommon(unittest.TestCase):
 
+    def non_empty_solution(self):
+        operated = 0
+        K = self.dataDictionary[None]["K"][None]
+        T = self.dataDictionary[None]["T"][None]
+        for k in range(1, K + 1):
+            for t in range(1, T + 1):
+                operated = operated + len(self.solution[(k, t)])
+        self.assertTrue(operated > 0)
+
     def non_overlapping_patients(self):
         K = self.dataDictionary[None]["K"][None]
         T = self.dataDictionary[None]["T"][None]

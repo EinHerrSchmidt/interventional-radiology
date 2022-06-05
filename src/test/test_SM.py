@@ -16,6 +16,9 @@ class TestSM(TestCommon):
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
+
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()
 

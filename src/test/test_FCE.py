@@ -15,6 +15,9 @@ class TestFCEStandard(TestCommon):
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
+
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()
 
@@ -48,6 +51,9 @@ class TestFCEVariant(TestCommon):
         planner = FCEV.Planner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
+
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
 
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()

@@ -10,8 +10,12 @@ class TestGreedy(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = Planner(self.dataDictionary)
-        self.solution = planner.compute_solution()
+        planner = Planner()
+        planner.solve_model(self.dataDictionary)
+        self.solution = planner.extract_solution()
+
+    def test_non_empty_solution(self):
+        self.non_empty_solution()
 
     def test_non_overlapping_patients(self):
         self.non_overlapping_patients()
