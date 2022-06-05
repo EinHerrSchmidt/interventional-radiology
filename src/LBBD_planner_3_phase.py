@@ -8,7 +8,7 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, timeLimit, gap, solver):
+    def __init__(self, timeLimit, gap, iterationsCap, solver):
         self.MPModel = pyo.AbstractModel()
         self.MPInstance = None
         self.MPModel.results = None
@@ -19,6 +19,7 @@ class Planner:
         self.SPInstance = None
         self.SPModel.results = None
         self.solver = pyo.SolverFactory(solver)
+        self.iterationsCap = iterationsCap
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
@@ -348,12 +349,9 @@ class Planner:
         overallSPBuildingTime = 0
         MPTimeLimitHit = False
         worstMPBoundTimeLimitHit = 0
-        while iterations < 30:
+        while iterations < self.iterationsCap:
             iterations += 1
             # MP
-            # self.fix_MP_x_variables()
-            # here this should not be needed (we skip directly the related constraints)
-            # self.fix_MP_beta_variables()
             print("Solving MP instance...")
             self.MPModel.results = self.solver.solve(self.MPInstance, tee=False)
             print("\nMP instance solved.")

@@ -8,12 +8,13 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, timeLimit, gap, solver):
+    def __init__(self, timeLimit, gap, iterationsCap, solver):
         self.MPModel = pyo.AbstractModel()
         self.MPInstance = None
         self.SPModel = pyo.AbstractModel()
         self.SPInstance = None
         self.solver = pyo.SolverFactory(solver)
+        self.iterationsCap = iterationsCap
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
@@ -313,7 +314,8 @@ class Planner:
         overallSPBuildingTime = 0
         MPTimeLimitHit = False
         worstMPBoundTimeLimitHit = 0
-        while True:
+        while iterations < self.iterationsCap:
+            iterations += 1
             # MP
             print("Solving MP instance...")
             self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
@@ -337,7 +339,6 @@ class Planner:
             self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
             print("SP instance solved.")
             solverTime += self.solver._last_solve_time
-            iterations += 1
 
             # no solution found, but solver status is fine: need to add a cut
             if(self.SPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
