@@ -1,21 +1,24 @@
 import logging
+import sys
 import time
-from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 import LBBD_planner as lbbd
 import LBBD_planner_3_phase as lbbdv
-from utils import SolutionVisualizer
 if __name__ == '__main__':
 
-    variant = True
+    variant = sys.argv[1] == "True"
+    maxIterations = int(sys.argv[2])
 
     solvers = ["cplex"]
     size = [60, 120, 180]
-    covid = [0.0, 0.2, 0.5, 0.8, 1.0]
+    covid = [0.2, 0.5, 0.8]
     anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
     anesthetists = [1, 2]
 
-    logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+    if(variant):
+        logging.basicConfig(filename='3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+    else:
+        logging.basicConfig(filename='vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tWorst_MP_Bound_Time_Limit\tIterations")
 
     for solver in solvers:
@@ -26,9 +29,9 @@ if __name__ == '__main__':
 
                         planner = None
                         if(variant):
-                            planner = lbbdv.Planner(timeLimit=300, solver=solver)
+                            planner = lbbdv.Planner(timeLimit=300, gap = 0.05, iterationsCap=maxIterations, solver=solver)
                         else:
-                            planner = lbbd.Planner(timeLimit=300, solver=solver)
+                            planner = lbbd.Planner(timeLimit=300, gap = 0.05, iterationsCap=maxIterations, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 

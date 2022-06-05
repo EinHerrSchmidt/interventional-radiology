@@ -5,8 +5,8 @@ from greedy_planner import Planner
 if __name__ == '__main__':
 
     size = [60, 120, 180]
-    covid = [0.5]
-    anesthesia = [0.8]
+    covid = [0.2, 0.5, 0.8]
+    anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
     anesthetists = [1, 2]
     for s in size:
         for c in covid:
@@ -14,11 +14,11 @@ if __name__ == '__main__':
                 for at in anesthetists:
                     dataDescriptor = DataDescriptor()
 
-                    dataDescriptor.patients = 80
+                    dataDescriptor.patients = s
                     dataDescriptor.days = 5
-                    dataDescriptor.anesthetists = 2
-                    dataDescriptor.covidFrequence = 0.5
-                    dataDescriptor.anesthesiaFrequence = 0.5
+                    dataDescriptor.anesthetists = at
+                    dataDescriptor.covidFrequence = c
+                    dataDescriptor.anesthesiaFrequence = a
                     dataDescriptor.specialtyBalance = 0.17
                     dataDescriptor.operatingDayDuration = 270
                     dataDescriptor.anesthesiaTime = 270
@@ -34,13 +34,10 @@ if __name__ == '__main__':
                     dataContainer = dataMaker.create_data_container(dataDescriptor)
                     dataDictionary = dataMaker.create_data_dictionary(dataContainer, dataDescriptor)
 
-                    # print("Data description:\n")
-                    # print(dataDescriptor)
-                    # dataMaker.print_data(dataDictionary)
-
-                    planner = Planner(dataDictionary)
-
-                    solution = planner.compute_solution()
+                    planner = Planner()
+                    planner.solve_model(dataDictionary)
+                    
+                    solution = planner.extract_solution()
                     sv = SolutionVisualizer()
                     sv.print_solution(solution)
                     sv.plot_graph(solution)

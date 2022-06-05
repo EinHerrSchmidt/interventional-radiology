@@ -1,17 +1,17 @@
 import logging
+import sys
 import time
-from pyomo.util.infeasible import log_infeasible_constraints
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 import fast_complete_heuristic as fce
 import fast_complete_heuristic_variant as fcev
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
-    variant = True
+    variant = sys.argv[1] == "True"
 
     solvers = ["cplex"]
     size = [60, 120, 180]
-    covid = [0.0, 0.2, 0.5, 0.8, 1.0]
+    covid = [0.2, 0.5, 0.8]
     anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
     anesthetists = [1, 2]
 
