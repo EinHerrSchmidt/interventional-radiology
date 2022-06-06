@@ -22,6 +22,8 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
             self.solver.options['emphasis'] = "mip 2"
+            self.solver.options['mip'] = "strategy probe 3"
+            self.solver.options['mip'] = "cuts all 2"
         if(solver == "gurobi"):
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
