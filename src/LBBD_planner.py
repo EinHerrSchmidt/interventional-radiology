@@ -424,11 +424,10 @@ class Planner:
                         for alpha in self.SPInstance.alpha:
                             if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
                                 anesthetist = alpha
-                        order = round(self.SPInstance.gamma[i].value)
+                        order = round(self.SPInstance.gamma[i].value, 2)
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
-                        patients.append(
-                            Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict

@@ -59,7 +59,7 @@ class SolutionVisualizer:
                 patients = solution[(k, t)]
                 for idx in range(0, len(patients)):
                     patient = patients[idx]
-                    start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=round(patient.order))
+                    start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=patient.order)
                     finish = start + datetime.timedelta(minutes=round(patient.operatingTime))
                     room = "S" + str(k)
                     covid = "Y" if patient.covid == 1 else "N"
