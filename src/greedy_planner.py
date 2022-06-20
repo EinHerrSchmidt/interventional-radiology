@@ -34,24 +34,68 @@ class Planner:
                                          anesthetist=0,
                                          order=0)
                                  )
-        # sort patients by r_i
-        self.patients.sort(key=lambda x: x.priority)
+        # sort patients by r_i / p_i: get the most bang for your buck
+        self.patients.sort(key=lambda x: x.priority / x.operatingTime, reverse=True)
 
     # fill rooms, for each day
     def fill_rooms(self):
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
-                selectedPatients = []
+                self.solution[(k, t)] = []
                 roomCapacity = self.dataDictionary[None]["s"][(k, t)]
-                tmpPatients = self.patients
-                idx = 0
-                for patient in tmpPatients:
+                tmpPatients = []
+                for patient in self.patients:
                     if(self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacity):
-                        selectedPatients.append(patient)
+                        self.solution[(k, t)].append(patient)
                         roomCapacity = roomCapacity - patient.operatingTime
-                        self.patients.pop(idx)
-                    idx = idx + 1
-                self.solution[(k, t)] = selectedPatients
+                    else:
+                        tmpPatients.append(patient)
+                self.patients = tmpPatients
+
+    def fill_rooms_first_fit(self):
+        roomCapacities = self.dataDictionary[None]["s"]
+        for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+            for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                self.solution[(k, t)] = []
+
+        tmpPatients = []
+        for patient in self.patients:
+            assigned = False
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    if(self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacities[(k, t)]):
+                        self.solution[(k, t)].append(patient)
+                        roomCapacities[(k, t)] = roomCapacities[(k, t)] - patient.operatingTime
+                        assigned = True
+                    if(assigned):
+                        break
+                if(assigned):
+                    break
+            if(not assigned):
+                tmpPatients.append(patient)
+        self.patients = tmpPatients
+
+    def fill_rooms_best_fit(self):
+        roomCapacities = self.dataDictionary[None]["s"]
+        for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+            for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                self.solution[(k, t)] = []
+
+        tmpPatients = []
+        for patient in self.patients:
+            bestSlot = (0,0)
+            minimumResidual = 99999999
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    if(self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacities[(k, t)] and roomCapacities[(k, t)] - patient.operatingTime < minimumResidual):
+                        minimumResidual = roomCapacities[(k, t)] - patient.operatingTime
+                        bestSlot = (k, t)
+            if(bestSlot != (0, 0)):
+                self.solution[bestSlot].append(patient)
+                roomCapacities[bestSlot] = minimumResidual
+            else:
+                tmpPatients.append(patient)
+        self.patients = tmpPatients
 
     # assign anesthetists to most rewarding room
     def assign_anesthetists(self):
@@ -123,17 +167,60 @@ class Planner:
     def fill_discarded_slots(self):
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
-                selectedPatients = self.solution[(k, t)]
-                roomCapacity = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in selectedPatients)
-                tmpPatients = self.patients
-                idx = 0
-                for patient in tmpPatients:
+                roomCapacity = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in self.solution[(k, t)])
+                tmpPatients = []
+                for patient in self.patients:
                     if(patient.anesthesia == 0 and self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacity):
-                        selectedPatients.append(patient)
+                        self.solution[(k, t)].append(patient)
                         roomCapacity = roomCapacity - patient.operatingTime
-                        self.patients.pop(idx)
-                    idx = idx + 1
-                self.solution[(k, t)] = selectedPatients
+                    else:
+                        tmpPatients.append(patient)
+                self.patients = tmpPatients
+
+    def fill_discarded_slots_first_fit(self):
+        roomCapacities = self.dataDictionary[None]["s"]
+        for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+            for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                roomCapacities[(k, t)] = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in self.solution[(k, t)])
+
+        tmpPatients = []
+        for patient in self.patients:
+            assigned = False
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    if(patient.anesthesia == 0 and self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacities[(k, t)]):
+                        self.solution[(k, t)].append(patient)
+                        roomCapacities[(k, t)] = roomCapacities[(k, t)] - patient.operatingTime
+                        assigned = True
+                    if(assigned):
+                        break
+                if(assigned):
+                    break
+            if(not assigned):
+                tmpPatients.append(patient)
+        self.patients = tmpPatients
+
+    def fill_discarded_slots_best_fit(self):
+        roomCapacities = self.dataDictionary[None]["s"]
+        for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+            for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                roomCapacities[(k, t)] = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in self.solution[(k, t)])
+
+        tmpPatients = []
+        for patient in self.patients:
+            bestSlot = (0,0)
+            minimumResidual = 99999999
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    if(self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacities[(k, t)] and roomCapacities[(k, t)] - patient.operatingTime < minimumResidual):
+                        minimumResidual = roomCapacities[(k, t)] - patient.operatingTime
+                        bestSlot = (k, t)
+            if(bestSlot != (0, 0)):
+                self.solution[bestSlot].append(patient)
+                roomCapacities[bestSlot] = roomCapacities[bestSlot] - patient.operatingTime
+            else:
+                tmpPatients.append(patient)
+        self.patients = tmpPatients
 
     # fix order
     def compute_patients_order(self):
