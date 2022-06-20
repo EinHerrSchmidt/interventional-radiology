@@ -102,7 +102,6 @@ class Planner:
         model.tau = pyo.Param(model.j, model.k, model.t)
         model.specialty = pyo.Param(model.i)
         model.bigM = pyo.Param(model.bigMRangeSet)
-
         model.d = pyo.Param(model.i)
         model.precedence = pyo.Param(model.i)
 

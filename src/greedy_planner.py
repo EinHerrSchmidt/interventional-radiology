@@ -1,3 +1,4 @@
+import copy
 from model import Patient
 
 
@@ -56,7 +57,7 @@ class Planner:
                 self.patients = tmpPatients
 
     def fill_rooms_first_fit(self):
-        roomCapacities = self.dataDictionary[None]["s"]
+        roomCapacities = copy.deepcopy(self.dataDictionary[None]["s"])
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                 self.solution[(k, t)] = []
@@ -79,7 +80,7 @@ class Planner:
         self.patients = tmpPatients
 
     def fill_rooms_best_fit(self):
-        roomCapacities = self.dataDictionary[None]["s"]
+        roomCapacities = copy.deepcopy(self.dataDictionary[None]["s"])
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                 self.solution[(k, t)] = []
@@ -181,7 +182,7 @@ class Planner:
                 self.patients = tmpPatients
 
     def fill_discarded_slots_first_fit(self):
-        roomCapacities = self.dataDictionary[None]["s"]
+        roomCapacities = copy.deepcopy(self.dataDictionary[None]["s"])
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                 roomCapacities[(k, t)] = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in self.solution[(k, t)])
@@ -204,7 +205,7 @@ class Planner:
         self.patients = tmpPatients
 
     def fill_discarded_slots_best_fit(self):
-        roomCapacities = self.dataDictionary[None]["s"]
+        roomCapacities = copy.deepcopy(self.dataDictionary[None]["s"])
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                 roomCapacities[(k, t)] = self.dataDictionary[None]["s"][(k, t)] - sum(p.operatingTime for p in self.solution[(k, t)])
@@ -248,14 +249,17 @@ class Planner:
             self.fill_rooms_best_fit()
         else:
             self.fill_rooms()
+
         self.assign_anesthetists()
         self.swap_anesthesia_patients()
+
         if(self.strategy == "first fit"):
             self.fill_discarded_slots_first_fit()
         elif(self.strategy == "best fit"):
             self.fill_discarded_slots_best_fit()
         else:
             self.fill_discarded_slots()
+
         self.compute_patients_order()
 
     def compute_objective_value(self):

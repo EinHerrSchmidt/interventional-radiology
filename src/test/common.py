@@ -12,13 +12,13 @@ def build_data_dictionary():
     dataDescriptor.specialtyBalance = 0.17
     dataDescriptor.operatingDayDuration = 270
     dataDescriptor.anesthesiaTime = 270
+    dataDescriptor.delayWeight = 0.75
     dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                     high=120,
                                                                     mean=60,
                                                                     stdDev=10)
     dataMaker = DataMaker(seed=52876)
-    dataContainer = dataMaker.create_data_container(dataDescriptor)
-    return dataMaker.create_data_dictionary(dataContainer, dataDescriptor)
+    return dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
 
 
 class TestCommon(unittest.TestCase):
@@ -91,8 +91,7 @@ class TestCommon(unittest.TestCase):
                 patientsNumber = len(patients)
                 if(patientsNumber == 0):
                     continue
-                totalOperatingTime = sum(
-                    map(lambda p: p.operatingTime, patients))
+                totalOperatingTime = sum(map(lambda p: p.operatingTime, patients))
                 self.assertTrue(totalOperatingTime <= self.dataDictionary[None]["s"][(k, t)])
 
     def end_of_day_constraint(self):
