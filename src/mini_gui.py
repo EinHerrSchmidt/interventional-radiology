@@ -118,14 +118,14 @@ class MiniGUI(object):
         dataDescriptor.specialtyBalance = 0.17
         dataDescriptor.operatingDayDuration = 270
         dataDescriptor.anesthesiaTime = 270
+        dataDescriptor.delayWeight = self.delayWeight.variable.get()
 
         dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                         high=120,
                                                                         mean=60,
                                                                         stdDev=10)
         dataMaker = DataMaker(seed=52876)
-        dataContainer = dataMaker.create_data_container(dataDescriptor)
-        dataDictionary = dataMaker.create_data_dictionary(dataContainer, dataDescriptor)
+        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
 
 
         planner = None
@@ -141,8 +141,12 @@ class MiniGUI(object):
             planner = fcev.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         elif(self.selectedMethod.get() == "SCE - Variant"):
             planner = scev.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+        elif(self.selectedMethod.get() == "Greedy - First Fit"):
+            planner = greedy.Planner(strategy="first fit")
+        elif(self.selectedMethod.get() == "Greedy - Best Fit"):
+            planner = greedy.Planner(strategy="best fit")
         else:
-            planner = greedy.Planner()
+            planner = greedy.Planner(strategy="default")
 
         print("Patients to be operated:\n")
         dataMaker.print_data(dataDictionary)
@@ -152,6 +156,7 @@ class MiniGUI(object):
         sv = SolutionVisualizer()
         sv.print_solution(solution)
         print("Objective function value: " + str(sv.compute_solution_value(solution)))
+        sv.print_patients_by_precedence(solution)
         sv.plot_graph(solution)
 
     def initializeUI(self):
@@ -184,11 +189,18 @@ class MiniGUI(object):
                                            value=1,
                                            orient="horizontal",
                                            labelText="Anesthetists")
+        self.delayWeight = ScaleWithEntry(master=self.parametersFrame,
+                                           type="double",
+                                           from_=0, to=1,
+                                           value=0.75,
+                                           orient="horizontal",
+                                           labelText="Delay weight")
 
         self.patients.pack()
         self.covid.pack()
         self.anesthesia.pack()
         self.anesthetists.pack()
+        self.delayWeight.pack()
 
         # solver selection combo
         self.selectedSolver = StringVar()
@@ -212,7 +224,7 @@ class MiniGUI(object):
         # method selection combo
         self.selectedMethod = StringVar()
         self.selectedMethod.set("Select method")
-        self.methods = ["greedy", "FCE", "FCE - Variant", "SCE", "SCE - Variant", "LBBD", "LBBD - 3 Phase Variant"]
+        self.methods = ["Greedy", "Greedy - First Fit", "Greedy - Best Fit", "FCE", "FCE - Variant", "SCE", "SCE - Variant", "LBBD", "LBBD - 3 Phase Variant"]
         self.methodsComboBox = Combobox(master=self.parametersFrame,
                                         textvariable=self.selectedMethod,
                                         values=self.methods,

@@ -3,8 +3,9 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self):
+    def __init__(self, strategy):
         self.solution = {}
+        self.strategy = strategy
 
     def create_room_specialty_map(self):
         self.roomSpecialtyMapping = {}
@@ -30,12 +31,14 @@ class Planner:
                                          day=0,
                                          operatingTime=self.dataDictionary[None]["p"][i],
                                          covid=self.dataDictionary[None]["c"][i],
+                                         precedence=self.dataDictionary[None]["precedence"][i],
+                                         delayWeight=self.dataDictionary[None]["d"][i],
                                          anesthesia=self.dataDictionary[None]["a"][i],
                                          anesthetist=0,
                                          order=0)
                                  )
-        # sort patients by r_i / p_i: get the most bang for your buck
-        self.patients.sort(key=lambda x: x.priority / x.operatingTime, reverse=True)
+        # sort patients by r_i * d_i / p_i (non-decreasing order): get the most bang for your buck, while considering delay weight
+        self.patients.sort(key=lambda x: x.priority * x.delayWeight / x.operatingTime, reverse=True)
 
     # fill rooms, for each day
     def fill_rooms(self):
@@ -227,7 +230,7 @@ class Planner:
         for k in range(1, self.dataDictionary[None]["K"][None] + 1):
             for t in range(1, self.dataDictionary[None]["T"][None] + 1):
                 patients = self.solution[(k, t)]
-                patients.sort(key=lambda x: x.covid)
+                patients.sort(key=lambda x: x.precedence)
                 for i in range(1, len(patients)):
                     patients[i].order = sum(p.operatingTime for p in patients[:i])
                 patients.sort(key=lambda x: x.order)
@@ -239,10 +242,20 @@ class Planner:
         self.create_room_anesthetist_map()
         self.create_patients_list()
 
-        self.fill_rooms()
+        if(self.strategy == "first fit"):
+            self.fill_rooms_first_fit()
+        elif(self.strategy == "best fit"):
+            self.fill_rooms_best_fit()
+        else:
+            self.fill_rooms()
         self.assign_anesthetists()
         self.swap_anesthesia_patients()
-        self.fill_discarded_slots()
+        if(self.strategy == "first fit"):
+            self.fill_discarded_slots_first_fit()
+        elif(self.strategy == "best fit"):
+            self.fill_discarded_slots_best_fit()
+        else:
+            self.fill_discarded_slots()
         self.compute_patients_order()
 
     def compute_objective_value(self):

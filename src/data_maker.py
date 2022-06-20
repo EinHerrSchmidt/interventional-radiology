@@ -1,8 +1,10 @@
+from enum import Enum
 import math
 from scipy.stats import truncnorm
 from scipy.stats import binom
 from scipy.stats import uniform
 import numpy as np
+import sample_data as sd
 
 from model import Patient
 
@@ -29,8 +31,8 @@ class DataDescriptor:
         self._specialtyBalance = None
         self._operatingDayDuration = None
         self._anesthesiaTime = None
-        self._operatingTimeDistribution = None
         self._priorityDistribution = None
+        self._delayWeight = None
 
     @property
     def patients(self):
@@ -115,13 +117,13 @@ class DataDescriptor:
         self._anesthesiaTime = value
 
     @property
-    def operatingTimeDistribution(self):
-        """Get parameters of the Truncated Normal Distribution for generating operating times."""
-        return self._operatingTimeDistribution
+    def delayWeight(self):
+        """Get the delay weight."""
+        return self._delayWeight
 
-    @operatingTimeDistribution.setter
-    def operatingTimeDistribution(self, value):
-        self._operatingTimeDistribution = value
+    @delayWeight.setter
+    def delayWeight(self, value):
+        self._delayWeight = value
 
     @property
     def priorityDistribution(self):
@@ -132,14 +134,13 @@ class DataDescriptor:
     def priorityDistribution(self, value):
         self._priorityDistribution = value
 
-    def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance, operatingTimeDistribution, priorityDistribution):
+    def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance, priorityDistribution):
         self.patients = patients
         self.days = days
         self.anesthetists = anesthetists
         self.covidFrequence = covidFrequence
         self.anesthesiaFrequence = anesthesiaFrequence
         self.specialtyBalance = specialtyBalance
-        self.operatingTimeDistribution = operatingTimeDistribution
         self.priorityDistribution = priorityDistribution
 
     def __str__(self):
@@ -156,34 +157,21 @@ Distributions for operating times and priorities are Truncated Normal Distributi
 \t\tMean:{self.priorityDistribution.mean:19}\n\
 \t\tStandard deviation:{self.priorityDistribution.stdDev:5}'
 
-class DataContainer:
-    def __init__(self, operatingRoomTimes, anesthetistsTimes, operatingTimes, priorities, anesthesiaFlags, covidFlags, specialties):
-        self.operatingRoomTimes = operatingRoomTimes
-        self.anesthetistsTimes = anesthetistsTimes
-        self.operatingTimes = self.sample_list_to_dict(operatingTimes)
-        self.priorities = self.sample_list_to_dict(priorities)
-        self.anesthesiaFlags = self.sample_list_to_dict(anesthesiaFlags)
-        self.covidFlags = self.sample_list_to_dict(covidFlags)
-        self.specialties = self.sample_list_to_dict(specialties)
-        self.ids = self.sample_list_to_dict([i for i in range(1, len(operatingTimes) + 1)])
-
-    def asList(self, sampleDictionary):
-        sampleAsList = []
-        for key, value in sampleDictionary.items():
-            sampleAsList.append(value)
-        return sampleAsList
-
-    def sample_list_to_dict(self, sample):
-        dict = {}
-        idx = 1
-        for s in sample:
-            dict[(str(idx))] = s
-            idx += 1
-        return dict
+class SurgeryType(Enum):
+    CLEAN = 1
+    DIRTY = 2
+    COVID = 3
 
 class DataMaker:
     def __init__(self, seed):
         np.random.seed(seed=seed)
+        self.dirtySurgeryMapping = sd.dirtySurgeryMapping
+        self.surgeryFrequencyMapping = sd.surgeryFrequencyMapping
+        self.UOFrequencyMapping = sd.UOFrequencyMapping
+        self.surgeryRoomOccupancyMapping = sd.surgeryRoomOccupancyMapping
+        self.delayFrequencyByOperation = sd.delayFrequencyByOperation
+        self.delayFrequencyByUO = sd.delayFrequencyByUO
+        self.operationGivenUO = sd.operationGivenUO
 
     def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev):
         a = (lower - mean) / stdDev
@@ -198,13 +186,13 @@ class DataMaker:
             sample = sample + 1
         return sample
 
-    def create_dictionary_entry(self, sample, isTime):
+    def create_dictionary_entry(self, sample, toRound):
         dict = {}
         for i in range(0, len(sample)):
-            if(isTime):
-                dict[(i + 1)] = int(sample[i]) - int(sample[i]) % 5
+            if(toRound):
+                dict[(i + 1)] = round(sample[i])
             else:
-                dict[(i + 1)] = int(sample[i])
+                dict[(i + 1)] = sample[i]
         return dict
 
     def create_room_timetable(self, K, T, operatingDayDuration):
@@ -242,66 +230,146 @@ class DataMaker:
                         dict[(j + 1, k + 1, t + 1)] = 0
         return dict
 
-    # only for Covid now, but can be extended
-    def create_precedence(self, covidFlags):
+    def setup_u_parameter(self, precedences):
         dict = {}
-        for i1 in range(1, len(covidFlags) + 1):
-            for i2 in range(1, len(covidFlags) + 1):
+        for i1 in range(1, len(precedences) + 1):
+            for i2 in range(1, len(precedences) + 1):
                 dict[(i1, i2)] = 0
                 dict[(i2, i1)] = 0
                 if(i1 == i2):
                     continue
-                if(covidFlags[i1 - 1] == 0 and covidFlags[i2 - 1] == 1):
+                if(precedences[i1 - 1] < precedences[i2 - 1]):
                     dict[(i1, i2)] = 1
                     continue
-                if(covidFlags[i2 - 1] == 0 and covidFlags[i1 - 1] == 1):
+                if(precedences[i2 - 1] < precedences[i1 - 1]):
                     dict[(i2, i1)] = 1
                     continue
         return dict
 
     def generate_data(self, dataDescriptor: DataDescriptor):
-        dataContainer = self.create_data_container(dataDescriptor)
-        return self.create_data_dictionary(dataContainer, dataDescriptor)
+        return self.create_data_dictionary(dataDescriptor)
         
-    def create_data_container(self, dataDescriptor: DataDescriptor) -> DataContainer:
-        operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms,
-                                                        dataDescriptor.days,
-                                                        dataDescriptor.operatingDayDuration)
-        anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists,
-                                                               dataDescriptor.days,
-                                                               dataDescriptor.anesthesiaTime)
-        # operatingTimes = self.generate_truncnorm_sample(dataDescriptor.patients,
-        #                                                 dataDescriptor.operatingTimeDistribution.low,
-        #                                                 dataDescriptor.operatingTimeDistribution.high,
-        #                                                 dataDescriptor.operatingTimeDistribution.mean,
-        #                                                 dataDescriptor.operatingTimeDistribution.stdDev)
-        operatingTimes = self.draw_categorical_from_sample(dataDescriptor.patients)
-        priorities = self.generate_truncnorm_sample(dataDescriptor.patients,
-                                                    dataDescriptor.priorityDistribution.low,
-                                                    dataDescriptor.priorityDistribution.high,
-                                                    dataDescriptor.priorityDistribution.mean,
-                                                    dataDescriptor.priorityDistribution.stdDev)
-        anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients,
-                                                        dataDescriptor.anesthesiaFrequence,
-                                                        isSpecialty=False)
-        covidFlags = self.generate_binomial_sample(dataDescriptor.patients,
-                                                   dataDescriptor.covidFrequence,
-                                                   isSpecialty=False)
-        specialties = self.generate_binomial_sample(dataDescriptor.patients,
-                                                    dataDescriptor.specialtyBalance,
-                                                    isSpecialty=True)
-        return DataContainer(operatingRoomTimes, anesthetistsTimes, operatingTimes, priorities, anesthesiaFlags, covidFlags, specialties)
+    def compute_surgery_types(self, surgeryIds, covidFlags):
+        surgeryTypes = []
+        for i in range(0, len(surgeryIds)):
+            if(covidFlags[i] == 1):
+                surgeryTypes.append(SurgeryType.COVID)
+                continue
+            if(self.dirtySurgeryMapping[surgeryIds[i]] == 1):
+                surgeryTypes.append(SurgeryType.DIRTY)
+                continue
+            surgeryTypes.append(SurgeryType.CLEAN)
+        return surgeryTypes
 
-    def create_data_dictionary(self, dataContainer: DataContainer, dataDescriptor: DataDescriptor):
-        operatingRoomTimes = dataContainer.operatingRoomTimes
-        anesthetistsTimes = dataContainer.anesthetistsTimes
-        operatingTimes = dataContainer.asList(dataContainer.operatingTimes)
-        priorities = dataContainer.asList(dataContainer.priorities)
-        anesthesiaFlags = dataContainer.asList(dataContainer.anesthesiaFlags)
-        covidFlags = dataContainer.asList(dataContainer.covidFlags)
-        specialties = dataContainer.asList(dataContainer.specialties)
-        ids = dataContainer.asList(dataContainer.ids)
+    def draw_delay_flags_by_UO(self, UOs):
+        draws = uniform.rvs(size=len(UOs))
+        delayFlags = []
+        for i in range(0, len(draws)):
+            if(draws[i] <= self.delayFrequencyByUO[UOs[i]]):
+                delayFlags.append(1)
+            else:
+                delayFlags.append(0)
+        return delayFlags
+
+    def draw_delay_flags_by_operation(self, patientSurgeryIds):
+        draws = uniform.rvs(size=len(patientSurgeryIds))
+        delayFlags = []
+        for i in range(0, len(draws)):
+            if(draws[i] <= self.delayFrequencyByOperation[patientSurgeryIds[i]]):
+                delayFlags.append(1)
+            else:
+                delayFlags.append(0)
+        return delayFlags
+
+    def compute_delay_weights(self, delayFlags, delayWeight):
+        delayWeights = []
+        for df in delayFlags:
+            if(df == 1):
+                delayWeights.append(delayWeight)
+            else:
+                delayWeights.append(1.0)
+        return delayWeights
+
+    def compute_precedences(self, surgeryTypes, delayFlags):
+        precedences = []
+        for i in range(0, len(surgeryTypes)):
+            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 0):
+                precedences.append(1)
+            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 1):
+                precedences.append(2)
+            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 0):
+                precedences.append(3)
+            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 1):
+                precedences.append(4)
+            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 0):
+                precedences.append(5)
+            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 1):
+                precedences.append(6)
+        return precedences
+
+    def draw_UO(self, n):
+        UOIds = list(self.UOFrequencyMapping.keys())
+        UOIdsFrequencies = list(self.UOFrequencyMapping.values())
+        cumulativeSum = np.cumsum(UOIdsFrequencies)
+        draws = uniform.rvs(size=n)
+        UOs = [""] * n
+        for i in range(0, len(draws)):
+            for j in range(0, len(cumulativeSum)):
+                if(draws[i] <= cumulativeSum[j]):
+                    UOs[i] = UOIds[j]
+                    break
+            if(UOs[i] == ""):
+                UOs[i] = UOIds[-1]
+        return UOs
+
+    def draw_operations_given_UO(self, UOs):
+        n = len(UOs)
+        draws = uniform.rvs(size=n)
+        operations = []
+        for i in range(0, n):
+            surgeryIds = list(self.operationGivenUO[UOs[i]].keys())
+            surgeryIdsFrequencies = list(self.operationGivenUO[UOs[i]].values())
+            cumulativeSum = np.cumsum(surgeryIdsFrequencies)
+            times = np.zeros(n) - 1
+            for j in range(0, len(cumulativeSum)):
+                if(draws[i] <= cumulativeSum[j]):
+                    times[i] = self.surgeryRoomOccupancyMapping[surgeryIds[j]]
+                    operations.append(surgeryIds[j])
+                    break
+            if(times[i] == -1):
+                times[i] = self.surgeryRoomOccupancyMapping[surgeryIds[-1]]
+                operations.append(surgeryIds[-1])
+        return operations
+
+    def compute_operating_times(self, operations):
+        times = []
+        for operation in operations:
+            times.append(self.surgeryRoomOccupancyMapping[operation])
+        return times
+
+    def create_data_dictionary(self, dataDescriptor: DataDescriptor, delayEstimate):
+        operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms, dataDescriptor.days, dataDescriptor.operatingDayDuration)
+        anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists, dataDescriptor.days, dataDescriptor.anesthesiaTime)
+        UOs = self.draw_UO(dataDescriptor.patients)
+        operations = self.draw_operations_given_UO(UOs)
+        operatingTimes = operatingTimes = self.compute_operating_times(operations)
+        priorities = self.generate_truncnorm_sample(dataDescriptor.patients, dataDescriptor.priorityDistribution.low, dataDescriptor.priorityDistribution.high, dataDescriptor.priorityDistribution.mean, dataDescriptor.priorityDistribution.stdDev)
+        anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.anesthesiaFrequence, isSpecialty=False)
+        covidFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.covidFrequence, isSpecialty=False)
+        specialties = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.specialtyBalance, isSpecialty=True)
+        ids = [i for i in range(1, len(operatingTimes) + 1)]
         maxOperatingRoomTime = 270
+        delayWeight = dataDescriptor.delayWeight
+        surgeryTypes = self.compute_surgery_types(operations, covidFlags)
+
+        delayFlags = None
+        if(delayEstimate == "UO"):
+            delayFlags = self.draw_delay_flags_by_UO(UOs)
+        if(delayEstimate == "procedure"):
+            delayFlags = self.draw_delay_flags_by_operation(operations)
+        delayWeights = self.compute_delay_weights(delayFlags, delayWeight)
+        precedences = self.compute_precedences(surgeryTypes, delayFlags)
+
         return {
             None: {
                 'I': {None: dataDescriptor.patients},
@@ -313,14 +381,15 @@ class DataMaker:
                 's': operatingRoomTimes,
                 'An': anesthetistsTimes,
                 'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
-                'p': self.create_dictionary_entry(operatingTimes, isTime=False),
-                'r': self.create_dictionary_entry(priorities, isTime=False),
-                'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
-                'c': self.create_dictionary_entry(covidFlags, isTime=False),
-                'u': self.create_precedence(covidFlags),
-                'patientId': self.create_dictionary_entry(ids, isTime=False),
-                'specialty': self.create_dictionary_entry(specialties, isTime=False),
-                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, self.create_dictionary_entry(specialties, isTime=False)),
+                'p': self.create_dictionary_entry(operatingTimes, toRound=False),
+                'r': self.create_dictionary_entry(priorities, toRound=True),
+                'd': self.create_dictionary_entry(delayWeights, toRound=False),
+                'a': self.create_dictionary_entry(anesthesiaFlags, toRound=False),
+                'c': self.create_dictionary_entry(covidFlags, toRound=False),
+                'u': self.setup_u_parameter(precedences),
+                'patientId': self.create_dictionary_entry(ids, toRound=False),
+                'specialty': self.create_dictionary_entry(specialties, toRound=False),
+                'precedence': self.create_dictionary_entry(precedences, toRound=False),
                 'bigM': {
                     1: math.floor(maxOperatingRoomTime/min(operatingTimes)),
                     2: maxOperatingRoomTime,
@@ -341,11 +410,15 @@ class DataMaker:
             operatingTime = data[None]['p'][(i + 1)]
             covid = data[None]['c'][(i + 1)]
             anesthesia = data[None]['a'][(i + 1)]
+            precedence = data[None]['precedence'][(i + 1)]
+            delayWeight = data[None]['d'][(i + 1)]
             print(Patient(id=id,
                           priority=priority,
                           specialty=specialty,
                           operatingTime=operatingTime,
                           covid=covid,
+                          precedence=precedence,
+                          delayWeight=delayWeight,
                           anesthesia=anesthesia,
                           room="N/A",
                           day="N/A",
@@ -353,60 +426,3 @@ class DataMaker:
                           order="N/A"
                           ))
         print("\n")
-
-    def create_data_dictionary_real_data(self, dataContainer: DataContainer, dataDescriptor: DataDescriptor):
-        operatingRoomTimes = dataContainer.operatingRoomTimes
-        anesthetistsTimes = dataContainer.anesthetistsTimes
-        operatingTimes = [24,30,127,15,63,55,58,75,15,23,18,31,50,84,79,35,100,32,24,70,32,33,23,90,10,50,18,27,17,14,23,25,85,92,54,39,19,19,85,35,95,40,65,25,30,34,30,92,39,22,70,15,15,86,24,37,19,33,32,13,40,37,23,30,29,43,27,125,9,128,27,23,22,86,20,29,6,97,60,63,95,30,27,70,30,34,225,46,40,77,20,40,25,130,55,15,52,66,106,27,28,35,125]
-        priorities = dataContainer.asList(dataContainer.priorities)
-        anesthesiaFlags = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]
-        covidFlags = dataContainer.asList(dataContainer.covidFlags)
-        specialties = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        ids = dataContainer.asList(dataContainer.ids)
-        totalOperatingTime = sum(operatingTimes)
-        return {
-            None: {
-                'I': {None: dataDescriptor.patients},
-                'J': {None: dataDescriptor.specialties},
-                'K': {None: dataDescriptor.operatingRooms},
-                'T': {None: dataDescriptor.days},
-                'A': {None: dataDescriptor.anesthetists},
-                'M': {None: 7},
-                's': operatingRoomTimes,
-                'An': anesthetistsTimes,
-                'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
-                'p': self.create_dictionary_entry(operatingTimes, isTime=True),
-                'r': self.create_dictionary_entry(priorities, isTime=False),
-                'a': self.create_dictionary_entry(anesthesiaFlags, isTime=False),
-                'c': self.create_dictionary_entry(covidFlags, isTime=False),
-                'u': self.create_precedence(covidFlags),
-                'patientId': self.create_dictionary_entry(ids, isTime=False),
-                'specialty': self.create_dictionary_entry(specialties, isTime=False),
-                'rho': self.create_patient_specialty_table(dataDescriptor.patients, dataDescriptor.specialties, self.create_dictionary_entry(specialties, isTime=False)),
-                'bigM': {
-                    1: dataDescriptor.patients,
-                    2: totalOperatingTime,
-                    3: totalOperatingTime,
-                    4: totalOperatingTime,
-                    5: totalOperatingTime,
-                    6: dataDescriptor.patients
-                }
-            }
-        }
-
-    def draw_categorical_from_sample(self, n):
-        sample = [60, 20, 135, 20, 60, 20, 135, 40, 20, 60, 20, 40, 15, 30, 40, 130, 60, 20, 40, 20, 20, 20, 135, 20, 20, 20, 20, 35, 50, 15, 20, 20, 40, 20, 20, 15, 100, 20, 15, 20, 20, 20, 20, 50, 20, 20, 20, 60, 20, 35, 40,
-          35, 15, 15, 35, 20, 135, 20, 30, 20, 20, 20, 35, 135, 30, 30, 15, 20, 20, 20, 20, 20, 30, 20, 15, 20, 135, 135, 60, 15, 15, 20, 15, 60, 20, 20, 50, 60, 30, 15, 20, 50, 60, 135, 20, 15, 20, 30, 15, 90, 50, 30, 60, 60, 30]
-        unique, counts = np.unique(sample, return_counts=True)
-        frequencies = counts / sum(counts)
-        cumulativeSum = np.cumsum(frequencies)
-        draws = uniform.rvs(size=n)
-        result = np.zeros(n) - 1
-        for i in range(0, len(draws)):
-            for j in range(0, len(cumulativeSum)):
-                if(draws[i] <= cumulativeSum[j]):
-                    result[i] = unique[j]
-                    break
-            if(result[i] == -1):
-                result[i] = unique[-1]
-        return result + 30
