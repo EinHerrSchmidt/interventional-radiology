@@ -147,7 +147,7 @@ class Planner:
                                         k1ResidualTime = self.dataDictionary[None]["s"][(k1, t)] - sum(p.operatingTime for p in self.solution[(k1, t)])
                                         k2ResidualTime = self.dataDictionary[None]["s"][(k2, t)] - sum(p.operatingTime for p in self.solution[(k2, t)])
                                         k2Patients = self.solution[(k2, t)]
-                                        # sort by operating time
+                                        # sort: try to swap with the patient with shortest operating time
                                         k2Patients.sort(key=lambda x: x.operatingTime)
                                         for k2Patient in k2Patients:
                                             # check if we can swap
@@ -164,8 +164,8 @@ class Planner:
                                                 break
                                         if(not mustDiscard):
                                             break
-                                if(mustDiscard):
-                                    self.solution[(k1, t)] = [x for x in self.solution[(k1, t)] if x.id != k1Patient.id]
+                            if(mustDiscard):
+                                self.solution[(k1, t)] = [x for x in self.solution[(k1, t)] if x.id != k1Patient.id]
 
     # add no-anesthesia patient where anesthesia patient were discarded
     def fill_discarded_slots(self):
