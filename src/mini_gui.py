@@ -130,13 +130,13 @@ class MiniGUI(object):
 
         planner = None
         if(self.selectedMethod.get() == "LBBD"):
-            planner = lbbd.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+            planner = lbbd.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get(), iterationsCap=50)
         elif(self.selectedMethod.get() == "FCE"):
             planner = fce.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         elif(self.selectedMethod.get() == "SCE"):
             planner = sce.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         elif(self.selectedMethod.get() == "LBBD - 3 Phase Variant"):
-            planner = lbbd3p.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
+            planner = lbbd3p.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get(), iterationsCap=50)
         elif(self.selectedMethod.get() == "FCE - Variant"):
             planner = fcev.Planner(timeLimit=self.timeLimit.value.get(), gap=self.gap.value.get()/100, solver=self.selectedSolver.get())
         elif(self.selectedMethod.get() == "SCE - Variant"):
