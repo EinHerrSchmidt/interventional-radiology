@@ -39,7 +39,7 @@ class Planner:
             # self.solver.options['printingOptions'] = "normal"
 
     @staticmethod
-    def weighted_objective_function(model):
+    def objective_function(model):
         return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
 
     # one surgery per patient, at most
@@ -110,7 +110,7 @@ class Planner:
 
     def define_objective(self, model):
         model.objective = pyo.Objective(
-            rule=self.weighted_objective_function,
+            rule=self.objective_function,
             sense=pyo.maximize)
 
     # assign an anesthetist if and only if a patient needs her
