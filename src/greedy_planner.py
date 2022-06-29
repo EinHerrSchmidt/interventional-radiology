@@ -337,10 +337,10 @@ class Planner:
 
 
     def find_solution(self, idx, anesthesiaPatients, pValues, optima):
-        if(idx == 0):
+        if(idx == -1):
             return []
         else:
-            if(pValues[idx] != -1 and anesthesiaPatients[idx].priority + optima[pValues[idx]] >= optima[idx - 1]):
+            if(anesthesiaPatients[idx].priority + optima[pValues[idx]] >= optima[idx - 1]):
                 return [anesthesiaPatients[idx].id] + self.find_solution(pValues[idx], anesthesiaPatients, pValues, optima)
             else:
                 return self.find_solution(idx - 1, anesthesiaPatients, pValues, optima)
