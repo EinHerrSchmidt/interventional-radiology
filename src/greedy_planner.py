@@ -1,4 +1,7 @@
+from bisect import bisect
 import copy
+from re import I
+from turtle import update
 from model import Patient
 
 
@@ -237,6 +240,31 @@ class Planner:
                 patients.sort(key=lambda x: x.order)
                 self.solution[(k, t)] = patients
 
+#    def solve_model(self, dataDictionary):
+#        self.dataDictionary = dataDictionary
+#        self.create_room_specialty_map()
+#        self.create_room_anesthetist_map()
+#        self.create_patients_list()
+#
+#        if(self.strategy == "first fit"):
+#            self.fill_rooms_first_fit()
+#        elif(self.strategy == "best fit"):
+#            self.fill_rooms_best_fit()
+#        else:
+#            self.fill_rooms()
+#
+#        self.assign_anesthetists()
+#        self.swap_anesthesia_patients()
+#
+#        if(self.strategy == "first fit"):
+#            self.fill_discarded_slots_first_fit()
+#        elif(self.strategy == "best fit"):
+#            self.fill_discarded_slots_best_fit()
+#        else:
+#            self.fill_discarded_slots()
+#
+#        self.compute_patients_order()
+
     def solve_model(self, dataDictionary):
         self.dataDictionary = dataDictionary
         self.create_room_specialty_map()
@@ -250,17 +278,8 @@ class Planner:
         else:
             self.fill_rooms()
 
-        self.assign_anesthetists()
-        self.swap_anesthesia_patients()
-
-        if(self.strategy == "first fit"):
-            self.fill_discarded_slots_first_fit()
-        elif(self.strategy == "best fit"):
-            self.fill_discarded_slots_best_fit()
-        else:
-            self.fill_discarded_slots()
-
         self.compute_patients_order()
+        self.select_non_overlapping()
 
     def compute_objective_value(self):
         value = 0
@@ -272,3 +291,49 @@ class Planner:
 
     def extract_solution(self):
         return self.solution
+
+    # for now, pretend anesthetist has the same span of operating room time
+    def select_non_overlapping(self):
+        for a in range(1, self.dataDictionary[None]["A"][None] + 1):
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                anesthesiaPatients = []
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    for p in self.solution[(k, t)]:
+                        if(p.anesthesia == 1):
+                            anesthesiaPatients.append(p)
+
+                if(anesthesiaPatients == []):
+                    continue
+                anesthesiaPatients.sort(key=lambda x: x.order + x.operatingTime)
+                pValues = [bisect(list(map((lambda ap: ap.order + ap.operatingTime), anesthesiaPatients)), patient.order) - 1 for patient in anesthesiaPatients]
+                optima = [0 for _ in anesthesiaPatients]
+                optima[0] = anesthesiaPatients[0].priority
+
+                for i in range(1, len(anesthesiaPatients)):
+                    optPi = 0
+                    if(pValues[i] != -1):
+                        optPi = optima[pValues[i]]
+                    optima[i] = max(anesthesiaPatients[i].priority + optPi, optima[i - 1])
+
+                selected = self.find_solution(len(anesthesiaPatients) - 1, anesthesiaPatients, pValues, optima)
+
+                
+                for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+                    updatedSolution = []
+                    for p in self.solution[(k, t)]:
+                        if(p.anesthesia == 0):
+                            updatedSolution.append(p)
+                        if(p.anesthesia == 1 and p.id in selected):
+                            p.anesthetist = a
+                            updatedSolution.append(p)
+                    self.solution[(k, t)] = updatedSolution
+
+
+    def find_solution(self, idx, anesthesiaPatients, pValues, optima):
+        if(idx == 0):
+            return []
+        else:
+            if(pValues[idx] != -1 and anesthesiaPatients[idx].priority + optima[pValues[idx]] >= optima[idx - 1]):
+                return [anesthesiaPatients[idx].id] + self.find_solution(pValues[idx], anesthesiaPatients, pValues, optima)
+            else:
+                return self.find_solution(idx - 1, anesthesiaPatients, pValues, optima)
