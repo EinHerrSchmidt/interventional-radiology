@@ -280,6 +280,7 @@ class Planner:
 
         self.compute_patients_order()
         self.select_non_overlapping()
+        self.remove_patients_without_anesthetist()
 
     def compute_objective_value(self):
         value = 0
@@ -299,7 +300,7 @@ class Planner:
                 anesthesiaPatients = []
                 for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                     for p in self.solution[(k, t)]:
-                        if(p.anesthesia == 1):
+                        if(p.anesthesia == 1 and p.anesthetist == 0):
                             anesthesiaPatients.append(p)
 
                 if(anesthesiaPatients == []):
@@ -317,16 +318,22 @@ class Planner:
 
                 selected = self.find_solution(len(anesthesiaPatients) - 1, anesthesiaPatients, pValues, optima)
 
-                
                 for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                     updatedSolution = []
                     for p in self.solution[(k, t)]:
-                        if(p.anesthesia == 0):
-                            updatedSolution.append(p)
-                        if(p.anesthesia == 1 and p.id in selected):
+                        if(p.id in selected):
                             p.anesthetist = a
-                            updatedSolution.append(p)
+                        updatedSolution.append(p)
                     self.solution[(k, t)] = updatedSolution
+
+    def remove_patients_without_anesthetist(self):
+        for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                updatedSolution = []
+                for p in self.solution[(k, t)]:
+                    if(p.anesthesia == 0 or p.anesthetist > 0):
+                        updatedSolution.append(p)
+                self.solution[(k, t)] = updatedSolution
 
 
     def find_solution(self, idx, anesthesiaPatients, pValues, optima):
