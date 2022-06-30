@@ -1,6 +1,8 @@
 from bisect import bisect
 import copy
+from enum import unique
 from re import I
+from select import select
 from turtle import update
 from model import Patient
 
@@ -46,18 +48,17 @@ class Planner:
 
     # fill rooms, for each day
     def fill_rooms(self):
+        tmpPatients = []
         for t in range(1, self.dataDictionary[None]["T"][None] + 1):
             for k in range(1, self.dataDictionary[None]["K"][None] + 1):
                 self.solution[(k, t)] = []
                 roomCapacity = self.dataDictionary[None]["s"][(k, t)]
-                tmpPatients = []
                 for patient in self.patients:
                     if(self.roomSpecialtyMapping[k] == patient.specialty and patient.operatingTime <= roomCapacity):
                         self.solution[(k, t)].append(patient)
                         roomCapacity = roomCapacity - patient.operatingTime
-                    else:
-                        tmpPatients.append(patient)
-                self.patients = tmpPatients
+                        tmpPatients.append(patient.id)
+                self.patients = [p for p in self.patients if p.id not in tmpPatients]
 
     def fill_rooms_first_fit(self):
         roomCapacities = copy.deepcopy(self.dataDictionary[None]["s"])
@@ -281,6 +282,7 @@ class Planner:
         self.compute_patients_order()
         self.select_non_overlapping()
         self.remove_patients_without_anesthetist()
+        self.fill_empty_space()
 
     def compute_objective_value(self):
         value = 0
@@ -344,3 +346,34 @@ class Planner:
                 return [anesthesiaPatients[idx].id] + self.find_solution(pValues[idx], anesthesiaPatients, pValues, optima)
             else:
                 return self.find_solution(idx - 1, anesthesiaPatients, pValues, optima)
+
+    def fill_empty_space(self):
+        for k in range(1, self.dataDictionary[None]["K"][None] + 1):
+            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
+                solutionPatients = self.solution[(k, t)]
+                selectedIds = []
+                for i in range(0, len(solutionPatients)):
+                    validPatients = []
+                    residualTime = 0
+                    previousPatientFinishing = 0
+                    if(i == 0):
+                        validPatients = list(filter(lambda p: p.precedence <= solutionPatients[i].precedence and p.anesthesia == 0, self.patients))
+                        residualTime = solutionPatients[i].order
+                    elif(i < len(solutionPatients) - 1):
+                        validPatients = list(filter(lambda p: solutionPatients[i - 1].precedence <= p.precedence and p.precedence <= solutionPatients[i].precedence and p.anesthesia == 0, self.patients))
+                        residualTime = solutionPatients[i].order - (solutionPatients[i - 1].order + solutionPatients[i - 1].operatingTime)
+                        previousPatientFinishing = solutionPatients[i - 1].order + solutionPatients[i - 1].operatingTime
+                    else:
+                        validPatients = list(filter(lambda p: solutionPatients[i].precedence <= p.precedence and p.anesthesia == 0, self.patients))
+                        residualTime = self.dataDictionary[None]["s"][(k, t)] - (solutionPatients[i].order + solutionPatients[i].operatingTime)
+                        previousPatientFinishing = solutionPatients[i].order + solutionPatients[i].operatingTime
+                    validPatients = sorted(validPatients, key=lambda x: (x.precedence, x.priority * x.delayWeight / x.operatingTime))
+                    for vp in validPatients:
+                        if(residualTime - vp.operatingTime < 0 or vp.specialty != self.roomSpecialtyMapping[k]):
+                            continue
+                        vp.order = previousPatientFinishing
+                        previousPatientFinishing = vp.order + vp.operatingTime
+                        self.solution[(k, t)].append(vp)
+                        selectedIds.append(vp.id)
+                        residualTime = residualTime - vp.operatingTime
+                self.patients = [p for p in self.patients if p.id not in selectedIds]
