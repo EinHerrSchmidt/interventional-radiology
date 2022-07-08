@@ -153,20 +153,28 @@ class Planner:
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        if(model.find_component('xParam') and model.xParam[i, k, t] == 0):
+        if(model.find_component('xParam') and model.xParam[i, k, t] == 0
+        or (model.specialty[i] == 1 and (k == 3 or k == 4))
+        or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        or (model.specialty[i1] != model.specialty[i2])
+        or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
-        if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -174,7 +182,9 @@ class Planner:
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
         if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
-        or(model.specialty[i1] != model.specialty[i2])):
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 

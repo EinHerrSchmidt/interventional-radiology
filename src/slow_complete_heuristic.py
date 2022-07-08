@@ -151,6 +151,9 @@ class Planner:
             return pyo.Constraint.Skip
         if(model.status[i, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
+        if((model.specialty[i] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
@@ -158,7 +161,10 @@ class Planner:
     def time_ordering_precedence_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 == i2):
+        if(i1 == i2
+        or (model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
@@ -168,7 +174,10 @@ class Planner:
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 == i2 or model.u[i1, i2] == 0 ):
+        if(i1 == i2 or model.u[i1, i2] == 0
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
@@ -181,17 +190,14 @@ class Planner:
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 >= i2):
+        if(i1 >= i2
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
-
-    @staticmethod
-    def maximum_anesthesia_patients_lb_constraint_rule(model, t):
-        if(sum(model.a[i] for i in model.i) == 0):
-            return pyo.Constraint.Skip
-        return (sum(model.a[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A)
 
     def define_anesthetists_number_param(self, model):
         model.A = pyo.Param(within=pyo.NonNegativeIntegers)

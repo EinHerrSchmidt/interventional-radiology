@@ -162,6 +162,9 @@ class Planner:
             return pyo.Constraint.Skip
         if(model.xParam[i, k, t] == 0):
             return pyo.Constraint.Skip
+        if((model.specialty[i] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
@@ -169,7 +172,10 @@ class Planner:
     def time_ordering_precedence_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 == i2):
+        if(i1 == i2
+        or (model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
         and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
@@ -180,7 +186,10 @@ class Planner:
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 == i2 or model.u[i1, i2] == 0 ):
+        if(i1 == i2 or model.u[i1, i2] == 0
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
             and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
@@ -194,7 +203,10 @@ class Planner:
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(i1 >= i2):
+        if(i1 >= i2
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
            and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
