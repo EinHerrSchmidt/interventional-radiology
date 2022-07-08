@@ -202,6 +202,8 @@ class StartingMinutePlanner(Planner):
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
+        if(model.a[i] == 0):
+            return pyo.Constraint.Skip
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
     # do not exceed anesthetist time in each day
@@ -212,10 +214,7 @@ class StartingMinutePlanner(Planner):
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-           or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)
-           or (model.find_component('xParam') and model.xParam[i1, k1, t] + model.xParam[i2, k1, t] == 2)
-           or (model.find_component('xParam') and model.xParam[i1, k2, t] + model.xParam[i2, k2, t] == 2)):
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
@@ -224,44 +223,42 @@ class StartingMinutePlanner(Planner):
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
-        if(model.find_component('xParam')):
-            i1AllDay = 0
-            i2AllDay = 0
-            for k in model.k:
-                # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
-                if(model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
-                    return pyo.Constraint.Skip
-                i1AllDay += model.xParam[i1, k, t]
-                i2AllDay += model.xParam[i2, k, t]
-            if(i1AllDay == 0 or i2AllDay == 0):
-                return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        if(model.find_component('xParam') and model.xParam[i, k, t] == 0):
+        if((model.specialty[i] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i] + model.p[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        if(i1 == i2
+        or (model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
-        if(i1 == i2 or model.u[i1, i2] == 0 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)):
+        if(i1 == i2 or model.u[i1, i2] == 0 
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
-        or(model.specialty[i1] != model.specialty[i2])):
+        if(i1 >= i2
+        or(model.specialty[i1] != model.specialty[i2])
+        or(model.specialty[i1] == 1 and (k == 3 or k == 4))
+        or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
