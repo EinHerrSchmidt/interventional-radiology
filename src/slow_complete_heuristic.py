@@ -10,7 +10,6 @@ class Planner:
 
     DISCARDED = 0
     FREE = 1
-    FIXED = 2
 
     def __init__(self, timeLimit, gap, solver):
         self.MPModel = pyo.AbstractModel()
@@ -130,8 +129,6 @@ class Planner:
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        if(model.status[i1, k1, t] == Planner.FIXED or model.status[i2, k2, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
@@ -149,8 +146,6 @@ class Planner:
     def end_of_day_rule(model, i, k, t):
         if(model.status[i, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(model.status[i, k, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
         or(model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
@@ -166,8 +161,6 @@ class Planner:
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
@@ -178,8 +171,6 @@ class Planner:
         or(model.specialty[i1] != model.specialty[i2])
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -194,8 +185,6 @@ class Planner:
         or(model.specialty[i1] != model.specialty[i2])
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
@@ -379,24 +368,35 @@ class Planner:
     def extend_data(self, data):
         xParamDict = {}
         statusDict = {}
-        for i in range(1, self.MPInstance.I + 1):
-            # patient i has been discarded
-            if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-                for k in range(1, self.MPInstance.K + 1):
-                    for t in range(1, self.MPInstance.T + 1):
-                        statusDict[(i, k, t )] = Planner.DISCARDED
+        # for i in range(1, self.MPInstance.I + 1):
+        #     # patient i has been discarded
+        #     if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
+        #         for k in range(1, self.MPInstance.K + 1):
+        #             for t in range(1, self.MPInstance.T + 1):
+        #                 statusDict[(i, k, t )] = Planner.DISCARDED
+        #                 xParamDict[(i, k, t)] = 0
+        #     else:
+        #         for t in range(1, self.MPInstance.T + 1):
+        #             # patient i is scheduled on day t
+        #             if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
+        #                 for k in range(1, self.MPInstance.K + 1):
+        #                     statusDict[(i, k, t)] = Planner.FREE
+        #                     xParamDict[(i, k, t)] = 1
+        #             else:
+        #                 for k in range(1, self.MPInstance.K + 1):
+        #                     statusDict[(i, k, t)] = Planner.DISCARDED
+        #                     xParamDict[(i, k, t)] = 0
+        for i in self.MPInstance.i:
+            for t in self.MPInstance.t:
+                # patient scheduled on day t
+                if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
+                    for k in range(1, self.MPInstance.K + 1):
+                        statusDict[(i, k, t)] = Planner.FREE
+                        xParamDict[(i, k, t)] = 1
+                else:
+                    for k in range(1, self.MPInstance.K + 1):
+                        statusDict[(i, k, t)] = Planner.DISCARDED
                         xParamDict[(i, k, t)] = 0
-            else:
-                for t in range(1, self.MPInstance.T + 1):
-                    # patient i is scheduled on day t
-                    if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
-                        for k in range(1, self.MPInstance.K + 1):
-                            statusDict[(i, k, t)] = Planner.FREE
-                            xParamDict[(i, k, t)] = 1
-                    else:
-                        for k in range(1, self.MPInstance.K + 1):
-                            statusDict[(i, k, t)] = Planner.FIXED
-                            xParamDict[(i, k, t)] = 0
         data[None]['xParam'] = xParamDict
         data[None]['status'] = statusDict
 
@@ -424,9 +424,6 @@ class Planner:
             for t in self.MPInstance.t:
                 for i in self.MPInstance.i:
                     if(self.SPInstance.status[i, k, t] == Planner.DISCARDED):
-                        self.SPInstance.x[i, k, t].fix(0)
-                        fixed += 1
-                    if(self.SPInstance.status[i, k, t] == Planner.FIXED):
                         self.SPInstance.x[i, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
