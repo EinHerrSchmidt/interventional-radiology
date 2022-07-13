@@ -35,7 +35,7 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
 
     # one surgery per patient, at most
     @staticmethod
@@ -440,8 +440,7 @@ class Planner:
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
                         precedence = self.SPInstance.precedence[i]
-                        delayWeight = self.SPInstance.d[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, delayWeight, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict

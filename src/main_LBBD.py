@@ -4,6 +4,7 @@ import time
 from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
 import LBBD_planner as lbbd
 import LBBD_planner_3_phase as lbbdv
+from utils import SolutionVisualizer
 if __name__ == '__main__':
 
     variant = sys.argv[1] == "True"
@@ -29,9 +30,9 @@ if __name__ == '__main__':
 
                         planner = None
                         if(variant):
-                            planner = lbbdv.Planner(timeLimit=300, gap = 0.005, iterationsCap=maxIterations, solver=solver)
+                            planner = lbbdv.Planner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
                         else:
-                            planner = lbbd.Planner(timeLimit=300, gap = 0.005, iterationsCap=maxIterations, solver=solver)
+                            planner = lbbd.Planner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 
@@ -43,7 +44,6 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
-                        dataDescriptor.delayWeight = 0.75
                         dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                                         high=120,
                                                                                         mean=60,
@@ -72,8 +72,8 @@ if __name__ == '__main__':
                                         + str(runInfo["worstMPBoundTimeLimitHit"]) + "\t"
                                         + str(runInfo["iterations"]))
 
-                        # solution = planner.extract_solution()
+                        solution = planner.extract_solution()
 
-                        # sv = SolutionVisualizer()
-                        # sv.print_solution(solution)
-                        # sv.plot_graph(solution)
+                        sv = SolutionVisualizer()
+                        sv.print_solution(solution)
+                        sv.plot_graph(solution)
