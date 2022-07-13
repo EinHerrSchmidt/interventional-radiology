@@ -40,20 +40,12 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
-                        dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
-                                                                                                high=120,
-                                                                                                mean=60,
-                                                                                                stdDev=20)
                         dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                                         high=120,
                                                                                         mean=60,
                                                                                         stdDev=10)
                         dataMaker = DataMaker(seed=52876)
-                        dataContainer = dataMaker.create_data_container(dataDescriptor)
-                        dataDictionary = dataMaker.create_data_dictionary(
-                            dataContainer, dataDescriptor)
-                        print("Data description:\n")
-                        print(dataDescriptor)
+                        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
                         t = time.time()
                         # print("\nPatients to be operated:\n")
                         dataMaker.print_data(dataDictionary)

@@ -33,7 +33,6 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
-
                         dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                                         high=120,
                                                                                         mean=60,

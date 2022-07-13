@@ -10,12 +10,12 @@ if __name__ == '__main__':
     variant = sys.argv[1] == "True"
 
     solvers = ["cplex"]
-    size = [60, 120, 180]
+    size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
-    anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
+    anesthesia = [0.2, 0.5, 0.8]
     anesthetists = [1, 2]
 
-    logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+    logging.basicConfig(filename='fce_times.log', encoding='utf-8', level=logging.INFO)
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tObjective_Function_LB")
 
     for solver in solvers:
@@ -26,9 +26,9 @@ if __name__ == '__main__':
                         
                         planner = None
                         if(variant):
-                            planner = fcev.Planner(timeLimit=300, solver=solver)
+                            planner = fcev.Planner(timeLimit=300, gap = 0.0, solver=solver)
                         else:
-                            planner = fce.Planner(timeLimit=300, solver=solver)
+                            planner = fce.Planner(timeLimit=300,gap = 0.0, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 
@@ -40,27 +40,19 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
-                        dataDescriptor.operatingTimeDistribution = TruncatedNormalParameters(low=30,
-                                                                                                high=120,
-                                                                                                mean=60,
-                                                                                                stdDev=20)
                         dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
                                                                                         high=120,
                                                                                         mean=60,
                                                                                         stdDev=10)
                         dataMaker = DataMaker(seed=52876)
-                        dataContainer = dataMaker.create_data_container(dataDescriptor)
-                        dataDictionary = dataMaker.create_data_dictionary(
-                            dataContainer, dataDescriptor)
-                        print("Data description:\n")
-                        print(dataDescriptor)
+                        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
                         t = time.time()
                         # print("\nPatients to be operated:\n")
                         dataMaker.print_data(dataDictionary)
                         runInfo = planner.solve_model(dataDictionary)
                         elapsed = (time.time() - t)
 
-                        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+                        logging.basicConfig(filename='fce_times.log', encoding='utf-8', level=logging.INFO)
                         logging.info(solver + "\t"
                                         + str(s) + "\t"
                                         + str(c) + "\t"
@@ -79,8 +71,8 @@ if __name__ == '__main__':
                                         + str(runInfo["SPTimeLimitHit"]) + "\t"
                                         + str(runInfo["objectiveFunctionLB"]))
 
-                        solution = planner.extract_solution()
+                        # solution = planner.extract_solution()
 
-                        sv = SolutionVisualizer()
-                        sv.print_solution(solution)
+                        # sv = SolutionVisualizer()
+                        # sv.print_solution(solution)
                         # sv.plot_graph(solution)
