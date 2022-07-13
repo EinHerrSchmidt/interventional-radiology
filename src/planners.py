@@ -1,10 +1,12 @@
 from __future__ import division
 import logging
+import re
 import time
 import pyomo.environ as pyo
 import plotly.express as px
 import pandas as pd
 import datetime
+from pyomo.opt import SolverStatus, TerminationCondition
 
 from model import Patient
 
@@ -14,11 +16,6 @@ class Planner:
     def __init__(self, timeLimit, gap, solver):
         self.model = pyo.AbstractModel()
         self.modelInstance = None
-        self.solver = pyo.SolverFactory(solver)
-        self.MPModel = pyo.AbstractModel()
-        self.MPInstance = None
-        self.SPModel = pyo.AbstractModel()
-        self.SPInstance = None
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.solver.options['timelimit'] = timeLimit
@@ -40,7 +37,7 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
 
     # one surgery per patient, at most
     @staticmethod
@@ -124,6 +121,7 @@ class Planner:
         print("Model instance created in " + str(round(elapsed, 2)) + "s")
         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
         logging.info("Model instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
 
     def common_extract_solution(self, modelInstance):
         dict = {}
@@ -143,8 +141,7 @@ class Planner:
                         specialty = modelInstance.specialty[i]
                         priority = modelInstance.r[i]
                         precedence = modelInstance.precedence[i]
-                        delayWeight = modelInstance.d[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, delayWeight, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
@@ -396,12 +393,26 @@ class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
         self.define_exclusive_precedence_constraint()
 
     def solve_model(self, data):
-        self.create_model_instance(data)
+        buildingTime = self.create_model_instance(data)
         self.fix_y_variables(self.modelInstance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
         print("\nModel instance solved.")
         print(self.model.results)
+        resultsAsString = str(self.model.results)
+        upperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
+
+        timeLimitHit = self.model.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+        statusOk = self.model.results.solver.status == SolverStatus.ok
+        gap = self.solver._gap
+
+        runInfo = {"BuildingTime": buildingTime,
+                "StatusOK": statusOk,
+                "TimeLimitHit": timeLimitHit,
+                "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
+            }
+
+        return runInfo
 
     def extract_solution(self):
         return super().common_extract_solution(self.modelInstance)
