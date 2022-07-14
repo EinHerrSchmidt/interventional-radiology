@@ -26,9 +26,9 @@ if __name__ == '__main__':
                         
                         planner = None
                         if(variant):
-                            planner = scev.Planner(timeLimit=300, solver=solver)
+                            planner = scev.Planner(timeLimit=600, gap=0.0, solver=solver)
                         else:
-                            planner = sce.Planner(timeLimit=300, solver=solver)
+                            planner = sce.Planner(timeLimit=600, gap=0.0, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 

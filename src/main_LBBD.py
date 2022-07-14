@@ -11,9 +11,9 @@ if __name__ == '__main__':
     maxIterations = int(sys.argv[2])
 
     solvers = ["cplex"]
-    size = [60, 120, 180]
-    covid = [0.2, 0.5, 0.8]
-    anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
+    size = [180]
+    covid = [0.5]
+    anesthesia = [0.8]
     anesthetists = [1, 2]
 
     if(variant):

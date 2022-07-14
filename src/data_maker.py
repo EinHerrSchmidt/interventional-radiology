@@ -290,21 +290,15 @@ class DataMaker:
                 delayWeights.append(1.0)
         return delayWeights
 
-    def compute_precedences(self, surgeryTypes, delayFlags):
+    def compute_precedences(self, surgeryTypes):
         precedences = []
         for i in range(0, len(surgeryTypes)):
-            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 0):
+            if(surgeryTypes[i] == SurgeryType.CLEAN):
                 precedences.append(1)
-            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 1):
-                precedences.append(2)
-            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 0):
+            if(surgeryTypes[i] == SurgeryType.DIRTY):
                 precedences.append(3)
-            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 1):
-                precedences.append(4)
-            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 0):
+            if(surgeryTypes[i] == SurgeryType.COVID):
                 precedences.append(5)
-            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 1):
-                precedences.append(6)
         return precedences
 
     def draw_UO(self, n):
@@ -347,7 +341,7 @@ class DataMaker:
             times.append(self.surgeryRoomOccupancyMapping[operation])
         return times
 
-    def create_data_dictionary(self, dataDescriptor: DataDescriptor, delayEstimate):
+    def create_data_dictionary(self, dataDescriptor: DataDescriptor):
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms, dataDescriptor.days, dataDescriptor.operatingDayDuration)
         anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists, dataDescriptor.days, dataDescriptor.anesthesiaTime)
         UOs = self.draw_UO(dataDescriptor.patients)
@@ -359,16 +353,9 @@ class DataMaker:
         specialties = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.specialtyBalance, isSpecialty=True)
         ids = [i for i in range(1, len(operatingTimes) + 1)]
         maxOperatingRoomTime = 270
-        delayWeight = dataDescriptor.delayWeight
         surgeryTypes = self.compute_surgery_types(operations, covidFlags)
 
-        delayFlags = None
-        if(delayEstimate == "UO"):
-            delayFlags = self.draw_delay_flags_by_UO(UOs)
-        if(delayEstimate == "procedure"):
-            delayFlags = self.draw_delay_flags_by_operation(operations)
-        delayWeights = self.compute_delay_weights(delayFlags, delayWeight)
-        precedences = self.compute_precedences(surgeryTypes, delayFlags)
+        precedences = self.compute_precedences(surgeryTypes)
 
         return {
             None: {
@@ -383,7 +370,6 @@ class DataMaker:
                 'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
                 'p': self.create_dictionary_entry(operatingTimes, toRound=False),
                 'r': self.create_dictionary_entry(priorities, toRound=True),
-                'd': self.create_dictionary_entry(delayWeights, toRound=False),
                 'a': self.create_dictionary_entry(anesthesiaFlags, toRound=False),
                 'c': self.create_dictionary_entry(covidFlags, toRound=False),
                 'u': self.setup_u_parameter(precedences),

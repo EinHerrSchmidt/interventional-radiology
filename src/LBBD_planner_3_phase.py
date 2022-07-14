@@ -40,7 +40,7 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
 
     # one surgery per patient, at most
     @staticmethod
@@ -365,7 +365,7 @@ class Planner:
             iterations += 1
             # MP
             print("Solving MP instance...")
-            self.MPModel.results = self.solver.solve(self.MPInstance, tee=False)
+            self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
             print("\nMP instance solved.")
             solverTime += self.solver._last_solve_time
             MPTimeLimitHit = MPTimeLimitHit or self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]

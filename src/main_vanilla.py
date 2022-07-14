@@ -21,7 +21,7 @@ if __name__ == '__main__':
                 for a in anesthesia:
                     for at in anesthetists:
                         
-                        planner = planners.SinglePhaseStartingMinutePlanner(8, 0.0, solver)
+                        planner = planners.SinglePhaseStartingMinutePlanner(600, 0.0, solver)
 
                         dataDescriptor = DataDescriptor()
 

@@ -504,8 +504,7 @@ class Planner:
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
                         precedence = self.SPInstance.precedence[i]
-                        delayWeight = self.SPInstance.d[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, delayWeight, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict

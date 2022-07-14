@@ -26,9 +26,9 @@ if __name__ == '__main__':
                         
                         planner = None
                         if(variant):
-                            planner = fcev.Planner(timeLimit=300, gap = 0.0, solver=solver)
+                            planner = fcev.Planner(timeLimit=600, gap = 0.0, solver=solver)
                         else:
-                            planner = fce.Planner(timeLimit=300,gap = 0.0, solver=solver)
+                            planner = fce.Planner(timeLimit=600,gap = 0.0, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 
