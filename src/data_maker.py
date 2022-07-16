@@ -1,5 +1,6 @@
 from enum import Enum
 import math
+from matplotlib import scale
 from scipy.stats import truncnorm
 from scipy.stats import binom
 from scipy.stats import uniform
@@ -7,14 +8,6 @@ import numpy as np
 import sample_data as sd
 
 from model import Patient
-
-
-class TruncatedNormalParameters:
-    def __init__(self, low, high, mean, stdDev):
-        self.low = low
-        self.high = high
-        self.mean = mean
-        self.stdDev = stdDev
 
 
 class DataDescriptor:
@@ -31,7 +24,6 @@ class DataDescriptor:
         self._specialtyBalance = None
         self._operatingDayDuration = None
         self._anesthesiaTime = None
-        self._priorityDistribution = None
         self._delayWeight = None
 
     @property
@@ -125,37 +117,16 @@ class DataDescriptor:
     def delayWeight(self, value):
         self._delayWeight = value
 
-    @property
-    def priorityDistribution(self):
-        """Get parameters of the Truncated Normal Distribution for generating priorities."""
-        return self._priorityDistribution
-
-    @priorityDistribution.setter
-    def priorityDistribution(self, value):
-        self._priorityDistribution = value
-
-    def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance, priorityDistribution):
+    def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance):
         self.patients = patients
         self.days = days
         self.anesthetists = anesthetists
         self.covidFrequence = covidFrequence
         self.anesthesiaFrequence = anesthesiaFrequence
         self.specialtyBalance = specialtyBalance
-        self.priorityDistribution = priorityDistribution
 
     def __str__(self):
-        return f'Patients:{self.patients:17}\nDays:{self.days:21}\nAnesthetists:{self.anesthetists:13}\nCovid frequence:{self.covidFrequence:10}\nAnesthesia frequence:{self.anesthesiaFrequence:5}\nSpecialty balance:{self.specialtyBalance:8}\n\
-Distributions for operating times and priorities are Truncated Normal Distributions with parameters:\n\
-\tOperating times:\n\
-\t\tLow:{self.operatingTimeDistribution.low:20}\n\
-\t\tHigh:{self.operatingTimeDistribution.high:19}\n\
-\t\tMean:{self.operatingTimeDistribution.mean:19}\n\
-\t\tStandard deviation:{self.operatingTimeDistribution.stdDev:5}\n\
-\tPriorities:\n\
-\t\tLow:{self.priorityDistribution.low:20}\n\
-\t\tHigh:{self.priorityDistribution.high:19}\n\
-\t\tMean:{self.priorityDistribution.mean:19}\n\
-\t\tStandard deviation:{self.priorityDistribution.stdDev:5}'
+        return f'Patients:{self.patients:17}\nDays:{self.days:21}\nAnesthetists:{self.anesthetists:13}\nCovid frequence:{self.covidFrequence:10}\nAnesthesia frequence:{self.anesthesiaFrequence:5}\nSpecialty balance:{self.specialtyBalance:8}'
 
 class SurgeryType(Enum):
     CLEAN = 1
@@ -172,6 +143,11 @@ class DataMaker:
         self.delayFrequencyByOperation = sd.delayFrequencyByOperation
         self.delayFrequencyByUO = sd.delayFrequencyByUO
         self.operationGivenUO = sd.operationGivenUO
+
+    def generate_uniform_sample(self, patients, lower, upper):
+        uniformDistribution = uniform(loc=lower, scale=upper - lower)
+        sample = uniformDistribution.rvs(patients)
+        return sample
 
     def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev):
         a = (lower - mean) / stdDev
@@ -347,7 +323,8 @@ class DataMaker:
         UOs = self.draw_UO(dataDescriptor.patients)
         operations = self.draw_operations_given_UO(UOs)
         operatingTimes = operatingTimes = self.compute_operating_times(operations)
-        priorities = self.generate_truncnorm_sample(dataDescriptor.patients, dataDescriptor.priorityDistribution.low, dataDescriptor.priorityDistribution.high, dataDescriptor.priorityDistribution.mean, dataDescriptor.priorityDistribution.stdDev)
+        #priorities = self.generate_truncnorm_sample(dataDescriptor.patients, 10, 120, 60, 10)
+        priorities = self.generate_uniform_sample(dataDescriptor.patients, 10, 120)
         anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.anesthesiaFrequence, isSpecialty=False)
         covidFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.covidFrequence, isSpecialty=False)
         specialties = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.specialtyBalance, isSpecialty=True)
@@ -397,14 +374,13 @@ class DataMaker:
             covid = data[None]['c'][(i + 1)]
             anesthesia = data[None]['a'][(i + 1)]
             precedence = data[None]['precedence'][(i + 1)]
-            delayWeight = data[None]['d'][(i + 1)]
             print(Patient(id=id,
                           priority=priority,
                           specialty=specialty,
                           operatingTime=operatingTime,
                           covid=covid,
                           precedence=precedence,
-                          delayWeight=delayWeight,
+                          delayWeight=None,
                           anesthesia=anesthesia,
                           room="N/A",
                           day="N/A",

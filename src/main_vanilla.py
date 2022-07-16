@@ -1,19 +1,19 @@
 import logging
 import sys
 import time
-from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
+from data_maker import DataDescriptor, DataMaker
 import planners
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
     solvers = ["cplex"]
-    size = [60, 120, 180]
+    size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
-    anesthesia = [0.0, 0.2, 0.5, 0.8, 1.0]
+    anesthesia = [0.2, 0.5, 0.8]
     anesthetists = [1, 2]
 
     logging.basicConfig(filename='vanilla_times.log', encoding='utf-8', level=logging.INFO)
-    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit")
+    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit\tUpper_bound\tGap\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
     for solver in solvers:
         for s in size:
@@ -33,13 +33,9 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
-                        dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
-                                                                                        high=120,
-                                                                                        mean=60,
-                                                                                        stdDev=10)
 
                         dataMaker = DataMaker(seed=52876)
-                        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
+                        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
                         t = time.time()
                         # print("\nPatients to be operated:\n")
                         dataMaker.print_data(dataDictionary)
@@ -48,8 +44,9 @@ if __name__ == '__main__':
 
                         solution = planner.extract_solution()
                         sv = SolutionVisualizer()
-                        sv.print_solution(solution)
-                        sv.plot_graph(solution)
+                        usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
+                        # sv.print_solution(solution)
+                        # sv.plot_graph(solution)
 
                         logging.basicConfig(filename='vanilla_times.log', encoding='utf-8', level=logging.INFO)
                         logging.info(solver + "\t"
@@ -62,6 +59,12 @@ if __name__ == '__main__':
                                         + str(runInfo["StatusOK"]) + "\t"
                                         + str(sv.compute_solution_value(solution)) + "\t"
                                         + str(runInfo["TimeLimitHit"]) + "\t"
-                                        + str(runInfo["Gap"]))
+                                        + str(runInfo["UpperBound"]) + "\t"
+                                        + str(runInfo["Gap"]) + "\t"
+                                        + str(usageInfo["Specialty1ORUsage"]) + "\t"
+                                        + str(usageInfo["Specialty2ORUsage"]) + "\t"
+                                        + str(usageInfo["Specialty1SelectedRatio"]) + "\t"
+                                        + str(usageInfo["Specialty2SelectedRatio"])
+                                        )
 
 

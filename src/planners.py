@@ -118,9 +118,6 @@ class Planner:
         t = time.time()
         self.modelInstance = self.model.create_instance(data)
         elapsed = (time.time() - t)
-        print("Model instance created in " + str(round(elapsed, 2)) + "s")
-        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        logging.info("Model instance created in " + str(round(elapsed, 2)) + "s")
         return elapsed
 
     def common_extract_solution(self, modelInstance):
@@ -404,11 +401,11 @@ class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
 
         timeLimitHit = self.model.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
         statusOk = self.model.results.solver.status == SolverStatus.ok
-        gap = self.solver._gap
 
         runInfo = {"BuildingTime": buildingTime,
                 "StatusOK": statusOk,
                 "TimeLimitHit": timeLimitHit,
+                "UpperBound": upperBound,
                 "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
             }
 

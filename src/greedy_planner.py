@@ -38,13 +38,13 @@ class Planner:
                                          operatingTime=self.dataDictionary[None]["p"][i],
                                          covid=self.dataDictionary[None]["c"][i],
                                          precedence=self.dataDictionary[None]["precedence"][i],
-                                         delayWeight=self.dataDictionary[None]["d"][i],
+                                         delayWeight=None,
                                          anesthesia=self.dataDictionary[None]["a"][i],
                                          anesthetist=0,
                                          order=0)
                                  )
         # sort patients by r_i * d_i / p_i (non-decreasing order): get the most bang for your buck, while considering delay weight
-        self.patients.sort(key=lambda x: x.priority * x.delayWeight / x.operatingTime, reverse=True)
+        self.patients.sort(key=lambda x: x.priority / x.operatingTime, reverse=True)
 
     # fill rooms, for each day
     def fill_rooms(self):
@@ -367,7 +367,7 @@ class Planner:
                         validPatients = list(filter(lambda p: solutionPatients[i].precedence <= p.precedence and p.anesthesia == 0, self.patients))
                         residualTime = self.dataDictionary[None]["s"][(k, t)] - (solutionPatients[i].order + solutionPatients[i].operatingTime)
                         previousPatientFinishing = solutionPatients[i].order + solutionPatients[i].operatingTime
-                    validPatients = sorted(validPatients, key=lambda x: (x.precedence, x.priority * x.delayWeight / x.operatingTime))
+                    validPatients = sorted(validPatients, key=lambda x: (x.precedence, x.priority / x.operatingTime))
                     for vp in validPatients:
                         if(residualTime - vp.operatingTime < 0 or vp.specialty != self.roomSpecialtyMapping[k]):
                             continue

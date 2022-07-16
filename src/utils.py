@@ -5,6 +5,8 @@ import datetime
 
 from pyparsing import PrecededBy
 
+from model import Patient
+
 class SolutionVisualizer:
 
     def __init__(self):
@@ -220,3 +222,55 @@ class SolutionVisualizer:
         ))
         fig.update_yaxes(categoryorder='category descending')
         fig.show()
+
+    def compute_room_utilization(self, solution, dataDictionary):
+        overallPatients = []
+        for i in range(1, dataDictionary[None]["I"][None] + 1):
+            overallPatients.append(Patient(id=i,
+                                            priority=dataDictionary[None]["r"][i],
+                                            room=0,
+                                            specialty=dataDictionary[None]["specialty"][i],
+                                            day=0,
+                                            operatingTime=dataDictionary[None]["p"][i],
+                                            covid=dataDictionary[None]["c"][i],
+                                            precedence=dataDictionary[None]["precedence"][i],
+                                            delayWeight=None,
+                                            anesthesia=dataDictionary[None]["a"][i],
+                                            anesthetist=0,
+                                            order=0)
+                                    )
+
+        specialty1TotalPatients = sum(map(lambda _: 1, list(filter(lambda p: p.specialty == 1, overallPatients))))
+        specialty2TotalPatients = sum(map(lambda _: 1, list(filter(lambda p: p.specialty == 2, overallPatients))))
+
+        KT = max(solution.keys())
+        K = KT[0]
+        T = KT[1]
+        specialty1TotalTime = 0
+        specialty2TotalTime = 0
+
+        specialty1UsedTime = 0
+        specialty2UsedTime = 0
+
+        specialty1SelectedPatients = 0
+        specialty2SelectedPatients = 0
+
+        for t in range(1, T + 1):
+            for k in range(1, K + 1):
+                if(k == 1 or k == 2):
+                    specialty1TotalTime += dataDictionary[None]["s"][(k, t)]
+                else:
+                    specialty2TotalTime += dataDictionary[None]["s"][(k, t)]
+                for patient in solution[(k, t)]:
+                    if(patient.specialty == 1):
+                        specialty1UsedTime += patient.operatingTime
+                        specialty1SelectedPatients += 1
+                    else:
+                        specialty2UsedTime += patient.operatingTime
+                        specialty2SelectedPatients += 1
+
+        return {"Specialty1ORUsage": specialty1UsedTime / specialty1TotalTime,
+                "Specialty2ORUsage": specialty2UsedTime / specialty2TotalTime,
+                "Specialty1SelectedRatio": specialty1SelectedPatients / specialty1TotalPatients,
+                "Specialty2SelectedRatio": specialty2SelectedPatients / specialty2TotalPatients
+        }
