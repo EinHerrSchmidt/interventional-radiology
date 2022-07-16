@@ -1,7 +1,9 @@
 import os
 
 if __name__ == '__main__':
-    # vanilla LBBD
-    os.system("python main_LBBD.py False 50")
-    # 3-phase LBBD
-    os.system("python main_LBBD.py True 50")
+    # "slow" complete heuristic
+    os.system("python main_SCE.py False")
+    # "fast" complete heuristic
+    os.system("python main_FCE.py False")
+    # vanilla
+    os.system("python main_vanilla.py")
