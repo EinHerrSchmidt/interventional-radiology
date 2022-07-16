@@ -41,7 +41,7 @@ if __name__ == '__main__':
                     sv = SolutionVisualizer()
                     usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
 
-                    logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+                    logging.basicConfig(filename='greedy_times.log', encoding='utf-8', level=logging.INFO)
                     logging.info(str(s) + "\t"
                                     + str(c) + "\t"
                                     + str(a) + "\t"
