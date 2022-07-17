@@ -338,6 +338,8 @@ class Planner:
         resultsAsString = str(self.MPModel.results)
         MPUpperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
+        self.solver.options['timelimit'] = max(10, 600 - self.solver._last_solve_time)
+
         # SP
         SPBuildingTime += self.create_SP_instance(data)
 

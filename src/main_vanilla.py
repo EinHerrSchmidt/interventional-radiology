@@ -12,14 +12,36 @@ if __name__ == '__main__':
     anesthesia = [0.2, 0.5, 0.8]
     anesthetists = [1, 2]
 
+    todo = [0,
+1,
+3,
+6,
+7,
+10,
+12,
+13,
+18,
+19,
+25,
+30,
+31,
+37,
+42,
+43]
+
     logging.basicConfig(filename='vanilla_times.log', encoding='utf-8', level=logging.INFO)
-    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit\tUpper_bound\tGap\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tSolverTime\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit\tUpper_bound\tGap\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+
+    curr = -1
 
     for solver in solvers:
         for s in size:
             for c in covid:
                 for a in anesthesia:
                     for at in anesthetists:
+                        curr += 1
+                        if(not curr in todo):
+                            continue
                         
                         planner = planners.SinglePhaseStartingMinutePlanner(600, 0.0, solver)
 
@@ -56,6 +78,7 @@ if __name__ == '__main__':
                                         + str(at) + "\t"
                                         + str(runInfo["BuildingTime"]) + "\t"
                                         + str(round(elapsed, 2)) + "\t"
+                                        + str(runInfo["SolverTime"]) + "\t"
                                         + str(runInfo["StatusOK"]) + "\t"
                                         + str(sv.compute_solution_value(solution)) + "\t"
                                         + str(runInfo["TimeLimitHit"]) + "\t"

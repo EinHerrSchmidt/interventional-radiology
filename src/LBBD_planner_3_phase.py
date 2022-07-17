@@ -361,6 +361,8 @@ class Planner:
         overallSPBuildingTime = 0
         MPTimeLimitHit = False
         worstMPBoundTimeLimitHit = 0
+        fail = False
+        objectiveValue = -1
         while iterations < self.iterationsCap:
             iterations += 1
             # MP
@@ -371,6 +373,11 @@ class Planner:
             MPTimeLimitHit = MPTimeLimitHit or self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
             print(float(re.search("Upper bound: -*(\d*.\d*)", str(self.MPModel.results)).group(1)))
 
+            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
+            if(self.solver.options['timelimit'] <= 0):
+                fail = True
+                break
+
             IPBuildingTime = self.create_IP_instance(data)
             self.fix_IP_x_variables()
 
@@ -378,6 +385,11 @@ class Planner:
             print("Solving IP instance...")
             self.IPModel.results = self.solver.solve(self.IPInstance, tee=False)
             print("\nIP instance solved.")
+
+            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
+            if(self.solver.options['timelimit'] <= 0):
+                fail = True
+                break
 
             if(self.IPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
                 self.MPInstance.cuts.add(sum(1 - self.MPInstance.x[i, k, t] for i in self.MPInstance.i for k in self.MPInstance.k for t in self.MPInstance.t if round(self.MPInstance.x[i, k, t].value) == 1) >= 1)
@@ -413,10 +425,11 @@ class Planner:
             else:
                 break
 
-        statusOk = self.SPModel.results and self.SPModel.results.solver.status == SolverStatus.ok
-        objectiveValue = -1
-        if(statusOk):
-            objectiveValue = pyo.value(self.SPInstance.objective)
+        statusOk = False
+        if(not fail):
+            statusOk = self.SPModel.results and self.SPModel.results.solver.status == SolverStatus.ok
+            if(statusOk):
+                objectiveValue = pyo.value(self.SPInstance.objective)
 
         runInfo = {"solutionTime": solverTime,
                     "MPBuildingTime": MPBuildingTime,
@@ -424,10 +437,14 @@ class Planner:
                     "statusOk": statusOk,
                     "objectiveValue": objectiveValue,
                     "MPTimeLimitHit": MPTimeLimitHit,
+                    "SPTimeLimitHit": -1,
                     "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
-                    "iterations": iterations}
+                    "iterations": iterations,
+                    "fail": fail
+                    }
 
-        print(self.SPModel.results)
+        if(not fail):
+            print(self.SPModel.results)
         return runInfo
 
     def extend_data(self, data):

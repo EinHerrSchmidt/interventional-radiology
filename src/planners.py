@@ -404,6 +404,7 @@ class SinglePhaseStartingMinutePlanner(StartingMinutePlanner):
 
         runInfo = {"BuildingTime": buildingTime,
                 "StatusOK": statusOk,
+                "SolverTime": self.solver._last_solve_time,
                 "TimeLimitHit": timeLimitHit,
                 "UpperBound": upperBound,
                 "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)

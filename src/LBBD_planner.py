@@ -325,7 +325,10 @@ class Planner:
         iterations = 0
         overallSPBuildingTime = 0
         MPTimeLimitHit = False
+        SPTimeLimitHit = False
         worstMPBoundTimeLimitHit = 0
+        fail = False
+        objectiveValue = -1
         while iterations < self.iterationsCap:
             iterations += 1
             # MP
@@ -334,6 +337,11 @@ class Planner:
             print("\nMP instance solved.")
             solverTime += self.solver._last_solve_time
             MPTimeLimitHit = MPTimeLimitHit or self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+
+            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
+            if(self.solver.options['timelimit'] <= 0):
+                fail = True
+                break
 
             # if we hit the time limit, we keep track of the worst possible bound (i.e. the highest) in order to give an estimate about
             # how bad our solution can be, given that time limit was hit at least once
@@ -345,12 +353,18 @@ class Planner:
 
             # SP
             overallSPBuildingTime += self.create_SP_instance(data)
+            if(self.solver.options['timelimit'] <= 0):
+                fail = True
+                break
 
             self.fix_SP_x_variables()
             print("Solving SP instance...")
             self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
             print("SP instance solved.")
             solverTime += self.solver._last_solve_time
+            SPTimeLimitHit = SPTimeLimitHit or self.SPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
+
+            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
 
             # no solution found, but solver status is fine: need to add a cut
             if(self.SPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
@@ -360,19 +374,25 @@ class Planner:
                 print("\n")
             else:
                 break
-
-        statusOk = self.SPModel.results.solver.status == SolverStatus.ok
+        
+        statusOk = False
+        if(not fail):
+            statusOk = self.SPModel.results.solver.status == SolverStatus.ok
+            objectiveValue = pyo.value(self.SPInstance.objective)
 
         runInfo = {"solutionTime": solverTime,
                     "MPBuildingTime": MPBuildingTime,
                     "SPBuildingTime": overallSPBuildingTime,
                     "statusOk": statusOk,
-                    "objectiveValue": pyo.value(self.SPInstance.objective),
+                    "objectiveValue": objectiveValue,
                     "MPTimeLimitHit": MPTimeLimitHit,
+                    "SPTimeLimitHit": SPTimeLimitHit,
                     "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
-                    "iterations": iterations}
+                    "iterations": iterations,
+                    "fail": fail}
 
-        print(self.SPModel.results)
+        if(not fail):
+            print(self.SPModel.results)
         return runInfo
 
     def extend_data(self, data):

@@ -20,7 +20,7 @@ if __name__ == '__main__':
         logging.basicConfig(filename='3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
     else:
         logging.basicConfig(filename='vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
-    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tWorst_MP_Bound_Time_Limit\tIterations\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+    logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tWorst_MP_Bound_Time_Limit\tIterations\tFailed\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
     for solver in solvers:
         for s in size:
@@ -53,9 +53,10 @@ if __name__ == '__main__':
                         runInfo = planner.solve_model(dataDictionary)
                         elapsed = (time.time() - t)
 
-                        solution = planner.extract_solution()
-                        sv = SolutionVisualizer()
-                        usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
+                        if(runInfo["fail"] == False):
+                            solution = planner.extract_solution()
+                            sv = SolutionVisualizer()
+                            usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
 
                         logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
                         logging.info(solver + "\t"
@@ -70,8 +71,10 @@ if __name__ == '__main__':
                                         + str(runInfo["statusOk"]) + "\t"
                                         + str(runInfo["objectiveValue"]) + "\t"
                                         + str(runInfo["MPTimeLimitHit"]) + "\t"
+                                        + str(runInfo["SPTimeLimitHit"]) + "\t"
                                         + str(runInfo["worstMPBoundTimeLimitHit"]) + "\t"
                                         + str(runInfo["iterations"]) + "\t"
+                                        + str(runInfo["fail"]) + "\t"
                                         + str(usageInfo["Specialty1ORUsage"]) + "\t"
                                         + str(usageInfo["Specialty2ORUsage"]) + "\t"
                                         + str(usageInfo["Specialty1SelectedRatio"]) + "\t"
