@@ -22,8 +22,8 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
             self.solver.options['emphasis'] = "mip 2"
-            self.solver.options['mip'] = "strategy probe 3"
-            self.solver.options['mip'] = "cuts all 2"
+            # self.solver.options['mip'] = "strategy probe 3"
+            # self.solver.options['mip'] = "cuts all 2"
         if(solver == "gurobi"):
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
@@ -478,10 +478,10 @@ class Planner:
         for k in self.MPInstance.k:
             for t in self.MPInstance.t:
                 for i1 in self.MPInstance.i:
-                    if(round(self.MPInstance.x[i1, k, t].value) == 1 and self.MPInstance.a[i1] == 0):
+                    if(round(self.SPInstance.xParam[i1, k, t]) == 1 and self.SPInstance.a[i1] == 0):
                         self.SPInstance.x[i1, k, t].fix(1)
                         fixed += 1
-                    if(round(self.MPInstance.x[i1, k, t].value) == 0):
+                    if(round(self.SPInstance.xParam[i1, k, t]) == 0):
                         self.SPInstance.x[i1, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")

@@ -241,31 +241,6 @@ class Planner:
                 patients.sort(key=lambda x: x.order)
                 self.solution[(k, t)] = patients
 
-#    def solve_model(self, dataDictionary):
-#        self.dataDictionary = dataDictionary
-#        self.create_room_specialty_map()
-#        self.create_room_anesthetist_map()
-#        self.create_patients_list()
-#
-#        if(self.strategy == "first fit"):
-#            self.fill_rooms_first_fit()
-#        elif(self.strategy == "best fit"):
-#            self.fill_rooms_best_fit()
-#        else:
-#            self.fill_rooms()
-#
-#        self.assign_anesthetists()
-#        self.swap_anesthesia_patients()
-#
-#        if(self.strategy == "first fit"):
-#            self.fill_discarded_slots_first_fit()
-#        elif(self.strategy == "best fit"):
-#            self.fill_discarded_slots_best_fit()
-#        else:
-#            self.fill_discarded_slots()
-#
-#        self.compute_patients_order()
-
     def solve_model(self, dataDictionary):
         self.dataDictionary = dataDictionary
         self.create_room_specialty_map()
@@ -279,10 +254,36 @@ class Planner:
         else:
             self.fill_rooms()
 
+        self.assign_anesthetists()
+        self.swap_anesthesia_patients()
+
+        if(self.strategy == "first fit"):
+            self.fill_discarded_slots_first_fit()
+        elif(self.strategy == "best fit"):
+            self.fill_discarded_slots_best_fit()
+        else:
+            self.fill_discarded_slots()
+
         self.compute_patients_order()
-        self.select_non_overlapping()
-        self.remove_patients_without_anesthetist()
-        self.fill_empty_space()
+
+    # WIS
+    # def solve_model(self, dataDictionary):
+    #     self.dataDictionary = dataDictionary
+    #     self.create_room_specialty_map()
+    #     self.create_room_anesthetist_map()
+    #     self.create_patients_list()
+# 
+    #     if(self.strategy == "first fit"):
+    #         self.fill_rooms_first_fit()
+    #     elif(self.strategy == "best fit"):
+    #         self.fill_rooms_best_fit()
+    #     else:
+    #         self.fill_rooms()
+# 
+    #     self.compute_patients_order()
+    #     self.select_non_overlapping()
+    #     self.remove_patients_without_anesthetist()
+    #     self.fill_empty_space()
 
     def compute_objective_value(self):
         value = 0

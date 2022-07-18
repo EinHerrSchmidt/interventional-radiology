@@ -224,6 +224,12 @@ class SolutionVisualizer:
         fig.show()
 
     def compute_room_utilization(self, solution, dataDictionary):
+        if(solution is None):
+            return {"Specialty1ORUsage": -1,
+                "Specialty2ORUsage": -1,
+                "Specialty1SelectedRatio": -1,
+                "Specialty2SelectedRatio": -1
+            }
         overallPatients = []
         for i in range(1, dataDictionary[None]["I"][None] + 1):
             overallPatients.append(Patient(id=i,

@@ -10,4 +10,4 @@ if __name__ == '__main__':
     # LBBD
     os.system("python main_LBBD.py False 10")
     # 3-phase LBBD
-    os.system("python main_LBBD.py False 10")
+    os.system("python main_LBBD.py True 10")

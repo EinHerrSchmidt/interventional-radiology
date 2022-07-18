@@ -595,7 +595,7 @@ class Planner:
         print(str(fixed) + " lambda variables fixed.")
 
     def extract_solution(self):
-        if(self.SPModel.results.solver.status != SolverStatus.ok):
+        if(self.SPModel.results.solver.status != SolverStatus.ok or self.SPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
             return None
         dict = {}
         for k in self.SPInstance.k:
