@@ -1,6 +1,8 @@
 import os
 
 if __name__ == '__main__':
+    if(not os.path.isdir("./times")):
+        os.mkdir("./times")
     # "slow" complete heuristic
     # os.system("python main_SCE.py False")
     # "fast" complete heuristic
@@ -8,6 +10,6 @@ if __name__ == '__main__':
     # vanilla
     # os.system("python main_vanilla.py")
     # LBBD
-    os.system("python main_LBBD.py False 10")
+    # os.system("python main_LBBD.py False 10")
     # 3-phase LBBD
-    os.system("python main_LBBD.py True 10")
+    # os.system("python main_LBBD.py True 10")

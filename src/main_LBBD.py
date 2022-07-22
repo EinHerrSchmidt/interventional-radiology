@@ -17,9 +17,9 @@ if __name__ == '__main__':
     anesthetists = [1, 2]
 
     if(variant):
-        logging.basicConfig(filename='3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        logging.basicConfig(filename='./times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
     else:
-        logging.basicConfig(filename='vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        logging.basicConfig(filename='./times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tWorst_MP_Bound_Time_Limit\tIterations\tFailed\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
     for solver in solvers:
@@ -48,7 +48,6 @@ if __name__ == '__main__':
                         dataMaker = DataMaker(seed=52876)
                         dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
                         t = time.time()
-                        # print("\nPatients to be operated:\n")
                         dataMaker.print_data(dataDictionary)
                         runInfo = planner.solve_model(dataDictionary)
                         elapsed = (time.time() - t)
@@ -58,7 +57,6 @@ if __name__ == '__main__':
                             sv = SolutionVisualizer()
                             usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
 
-                        logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
                         logging.info(solver + "\t"
                                         + str(s) + "\t"
                                         + str(c) + "\t"

@@ -9,9 +9,11 @@ from model import Patient
 
 class Planner:
 
-    def __init__(self, strategy):
+    def __init__(self, packingStrategy, anesthetistAssignmentStrategy):
         self.solution = {}
-        self.strategy = strategy
+        self.packingStrategy = packingStrategy
+        self.anesthetistAssignmentStrategy = anesthetistAssignmentStrategy
+
 
     def create_room_specialty_map(self):
         self.roomSpecialtyMapping = {}
@@ -247,43 +249,29 @@ class Planner:
         self.create_room_anesthetist_map()
         self.create_patients_list()
 
-        if(self.strategy == "first fit"):
+        if(self.packingStrategy == "first fit"):
             self.fill_rooms_first_fit()
-        elif(self.strategy == "best fit"):
+        elif(self.packingStrategy == "best fit"):
             self.fill_rooms_best_fit()
         else:
             self.fill_rooms()
 
-        self.assign_anesthetists()
-        self.swap_anesthesia_patients()
-
-        if(self.strategy == "first fit"):
-            self.fill_discarded_slots_first_fit()
-        elif(self.strategy == "best fit"):
-            self.fill_discarded_slots_best_fit()
-        else:
-            self.fill_discarded_slots()
-
-        self.compute_patients_order()
-
-    # WIS
-    # def solve_model(self, dataDictionary):
-    #     self.dataDictionary = dataDictionary
-    #     self.create_room_specialty_map()
-    #     self.create_room_anesthetist_map()
-    #     self.create_patients_list()
-# 
-    #     if(self.strategy == "first fit"):
-    #         self.fill_rooms_first_fit()
-    #     elif(self.strategy == "best fit"):
-    #         self.fill_rooms_best_fit()
-    #     else:
-    #         self.fill_rooms()
-# 
-    #     self.compute_patients_order()
-    #     self.select_non_overlapping()
-    #     self.remove_patients_without_anesthetist()
-    #     self.fill_empty_space()
+        # WIS
+        if(self.anesthetistAssignmentStrategy == "WIS"):
+            self.compute_patients_order()
+            self.select_non_overlapping()
+            self.remove_patients_without_anesthetist()
+            self.fill_empty_space()
+        elif(self.anesthetistAssignmentStrategy == "single_anesthetist_per_room"):
+            self.assign_anesthetists()
+            self.swap_anesthesia_patients()
+            if(self.packingStrategy == "first fit"):
+                self.fill_discarded_slots_first_fit()
+            elif(self.packingStrategy == "best fit"):
+                self.fill_discarded_slots_best_fit()
+            else:
+                self.fill_discarded_slots()
+            self.compute_patients_order()
 
     def compute_objective_value(self):
         value = 0

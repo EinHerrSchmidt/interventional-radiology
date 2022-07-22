@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 from data_maker import DataDescriptor, DataMaker
 from utils import SolutionVisualizer
@@ -6,12 +7,21 @@ from greedy_planner import Planner
 
 if __name__ == '__main__':
 
+    variant = sys.argv[1] == "True"
+
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
     anesthesia = [0.2, 0.5, 0.8]
     anesthetists = [1, 2]
 
-    logging.basicConfig(filename='greedy_times.log', encoding='utf-8', level=logging.INFO)
+    anesthetistAssignmentStrategy = None
+
+    if(variant):
+        logging.basicConfig(filename='./times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        anesthetistAssignmentStrategy = "WIS"
+    else:
+        logging.basicConfig(filename='./times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        anesthetistAssignmentStrategy = "single_anesthetist_per_room"
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tSolving_time\tObjective_function_value\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
     for s in size:
@@ -33,7 +43,7 @@ if __name__ == '__main__':
                     dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
 
                     t = time.time()
-                    planner = Planner(strategy=None)
+                    planner = Planner(packingStrategy=None, anesthetistAssignmentStrategy=anesthetistAssignmentStrategy)
                     planner.solve_model(dataDictionary)
                     elapsed = (time.time() - t)
 
@@ -41,7 +51,6 @@ if __name__ == '__main__':
                     sv = SolutionVisualizer()
                     usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
 
-                    logging.basicConfig(filename='greedy_times.log', encoding='utf-8', level=logging.INFO)
                     logging.info(str(s) + "\t"
                                     + str(c) + "\t"
                                     + str(a) + "\t"

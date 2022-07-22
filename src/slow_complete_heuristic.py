@@ -370,24 +370,6 @@ class Planner:
     def extend_data(self, data):
         xParamDict = {}
         statusDict = {}
-        # for i in range(1, self.MPInstance.I + 1):
-        #     # patient i has been discarded
-        #     if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-        #         for k in range(1, self.MPInstance.K + 1):
-        #             for t in range(1, self.MPInstance.T + 1):
-        #                 statusDict[(i, k, t )] = Planner.DISCARDED
-        #                 xParamDict[(i, k, t)] = 0
-        #     else:
-        #         for t in range(1, self.MPInstance.T + 1):
-        #             # patient i is scheduled on day t
-        #             if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
-        #                 for k in range(1, self.MPInstance.K + 1):
-        #                     statusDict[(i, k, t)] = Planner.FREE
-        #                     xParamDict[(i, k, t)] = 1
-        #             else:
-        #                 for k in range(1, self.MPInstance.K + 1):
-        #                     statusDict[(i, k, t)] = Planner.DISCARDED
-        #                     xParamDict[(i, k, t)] = 0
         for i in self.MPInstance.i:
             for t in self.MPInstance.t:
                 # patient scheduled on day t
@@ -429,50 +411,6 @@ class Planner:
                         self.SPInstance.x[i, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
-
-    def fix_MP_x_variables(self):
-        print("Fixing x variables for MP...")
-        fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i in self.MPInstance.i:
-                    if(self.MPInstance.specialty[i] == 1 and (k == 3 or k == 4)):
-                        self.MPInstance.x[i, k, t].fix(0)
-                    if(self.MPInstance.specialty[i] == 2 and (k == 1 or k == 2)):
-                        self.MPInstance.x[i, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_SP_beta_variables(self):
-        print("Fixing beta variables for phase two...")
-        fixed = 0
-        for i in self.MPInstance.i:
-            for t in self.MPInstance.t:
-                if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 0):
-                    for a in self.MPInstance.alpha:
-                        self.SPInstance.beta[a, i, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " beta variables fixed.")
-
-    def fix_MP_beta_variables(self):
-        print("Fixing beta variables for MP...")
-        fixed = 0
-        for i in self.MPInstance.i:
-            if(self.MPInstance.a[i] == 0):
-                for t in self.MPInstance.t:
-                    for a in self.MPInstance.alpha:
-                        self.MPInstance.beta[a, i, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " beta variables fixed.")
-
-    def fix_SP_gamma_variables(self):
-        print("Fixing gamma variables...")
-        fixed = 0
-        for i1 in self.MPInstance.i:
-            if(sum(round(self.MPInstance.x[i1, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-                self.SPInstance.gamma[i1].fix(0)
-                fixed += 1
-        print(str(fixed) + " gamma variables fixed.")
 
     def extract_solution(self):
         if(self.SPModel.results.solver.status != SolverStatus.ok):

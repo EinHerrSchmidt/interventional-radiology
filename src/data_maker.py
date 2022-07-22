@@ -323,13 +323,13 @@ class DataMaker:
         UOs = self.draw_UO(dataDescriptor.patients)
         operations = self.draw_operations_given_UO(UOs)
         operatingTimes = operatingTimes = self.compute_operating_times(operations)
-        #priorities = self.generate_truncnorm_sample(dataDescriptor.patients, 10, 120, 60, 10)
         priorities = self.generate_uniform_sample(dataDescriptor.patients, 10, 120)
         anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.anesthesiaFrequence, isSpecialty=False)
         covidFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.covidFrequence, isSpecialty=False)
         specialties = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.specialtyBalance, isSpecialty=True)
         ids = [i for i in range(1, len(operatingTimes) + 1)]
-        maxOperatingRoomTime = 270
+        # for now we assume same duration for each room, on each day
+        maxOperatingRoomTime = dataDescriptor.operatingDayDuration
         surgeryTypes = self.compute_surgery_types(operations, covidFlags)
 
         precedences = self.compute_precedences(surgeryTypes)
