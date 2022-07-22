@@ -4,7 +4,7 @@ from tkinter import *
 from tkinter.ttk import *
 
 from click import command
-from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
+from data_maker import DataDescriptor, DataMaker
 import fast_complete_heuristic as fce
 import fast_complete_heuristic_variant as fcev
 import slow_complete_heuristic as sce
@@ -120,12 +120,8 @@ class MiniGUI(object):
         dataDescriptor.anesthesiaTime = 270
         dataDescriptor.delayWeight = self.delayWeight.variable.get()
 
-        dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
-                                                                        high=120,
-                                                                        mean=60,
-                                                                        stdDev=10)
         dataMaker = DataMaker(seed=52876)
-        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
+        dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
 
 
         planner = None
