@@ -29,6 +29,7 @@ class Planner:
             self.solver.options['seconds'] = timeLimit
             self.solver.options['ratiogap'] = gap
             self.solver.options['heuristics'] = "on"
+            self.solver.options['threads'] = 12
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
             self.solver.options['cuts'] = "on"

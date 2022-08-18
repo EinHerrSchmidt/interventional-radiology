@@ -17,10 +17,10 @@ if __name__ == '__main__':
     anesthetistAssignmentStrategy = None
 
     if(variant):
-        logging.basicConfig(filename='./times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        logging.basicConfig(filename='./times/greedy_WIS_times.log', encoding='utf-8', level=logging.INFO)
         anesthetistAssignmentStrategy = "WIS"
     else:
-        logging.basicConfig(filename='./times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+        logging.basicConfig(filename='./times/greedy_standard_times.log', encoding='utf-8', level=logging.INFO)
         anesthetistAssignmentStrategy = "single_anesthetist_per_room"
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tSolving_time\tObjective_function_value\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 

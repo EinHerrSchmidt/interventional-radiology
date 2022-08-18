@@ -22,6 +22,8 @@ class Planner:
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
             self.solver.options['emphasis'] = "mip 2"
+            # self.solver.options['mip'] = "strategy probe 3"
+            # self.solver.options['mip'] = "cuts all 2"
         if(solver == "gurobi"):
             self.solver.options['timelimit'] = timeLimit
             self.solver.options['mipgap'] = gap
@@ -30,6 +32,7 @@ class Planner:
             self.solver.options['seconds'] = timeLimit
             self.solver.options['ratiogap'] = gap
             self.solver.options['heuristics'] = "on"
+            self.solver.options['threads'] = 12
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
             self.solver.options['cuts'] = "on"
@@ -38,7 +41,11 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+
+    @staticmethod
+    def objective_function_MP(model):
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t) + 1 / (sum(model.An[alpha, t] for alpha in model.alpha for t in model.t) + sum(model.p[i] for i in model.i)) * sum(model.An[alpha, t] - sum(model.beta[alpha, i, t] * model.p[i] for i in model.t) for alpha in model.alpha for t in model.t )
 
     # one surgery per patient, at most
     @staticmethod
@@ -109,6 +116,11 @@ class Planner:
     def define_objective(self, model):
         model.objective = pyo.Objective(
             rule=self.objective_function,
+            sense=pyo.maximize)
+
+    def define_objective_MP(self, model):
+        model.objective = pyo.Objective(
+            rule=self.objective_function_MP,
             sense=pyo.maximize)
 
     # assign an anesthetist if and only if a patient needs her
@@ -213,12 +225,6 @@ class Planner:
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
-    @staticmethod
-    def maximum_anesthesia_time_constraint_rule(model, t):
-        if(sum(model.a[i] for i in model.i) == 0):
-            return pyo.Constraint.Skip
-        return (sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A * 270)
-
     def define_anesthetists_number_param(self, model):
         model.A = pyo.Param(within=pyo.NonNegativeIntegers)
 
@@ -317,10 +323,19 @@ class Planner:
             self.SPModel.t,
             rule=self.exclusive_precedence_rule)
 
-    def define_maximum_anesthesia_time_constraint(self):
-        self.MPModel.maximum_anesthesia_time_constraint = pyo.Constraint(
-            self.MPModel.t,
-            rule=self.maximum_anesthesia_time_constraint_rule)
+    def define_common_components_MP(self, model):
+        self.define_sets(model)
+        self.define_x_variables(model)
+        self.define_parameters(model)
+        self.define_single_surgery_constraints(model)
+        self.define_surgery_time_constraints(model)
+        self.define_specialty_assignment_constraints(model)
+        self.define_anesthetists_number_param(model)
+        self.define_anesthetists_range_set(model)
+        self.define_beta_variables(model)
+        self.define_anesthetists_availability(model)
+        self.define_anesthetist_assignment_constraint(model)
+        # self.define_anesthetist_time_constraint(model)
 
     def define_common_components(self, model):
         self.define_sets(model)
@@ -331,21 +346,19 @@ class Planner:
         self.define_specialty_assignment_constraints(model)
         self.define_anesthetists_number_param(model)
         self.define_anesthetists_range_set(model)
+        self.define_beta_variables(model)
         self.define_anesthetists_availability(model)
+        self.define_anesthetist_assignment_constraint(model)
+        self.define_anesthetist_time_constraint(model)
 
     def define_MP(self):
-        self.define_common_components(self.MPModel)
-        self.define_maximum_anesthesia_time_constraint()
-        self.define_objective(self.MPModel)
+        self.define_common_components_MP(self.MPModel)
+        self.define_objective_MP(self.MPModel)
 
     def define_SP(self):
         self.define_common_components(self.SPModel)
 
         # SP's components
-        self.define_beta_variables(self.SPModel)
-        self.define_anesthetist_assignment_constraint(self.SPModel)
-        self.define_anesthetist_time_constraint(self.SPModel)
-
         self.define_x_parameters()
         self.define_status_parameters()
         self.define_lambda_variables()
@@ -365,14 +378,16 @@ class Planner:
         self.define_SP()
         MPBuildingTime = self.create_MP_instance(data)
 
+        # MP
         print("Solving MP instance...")
         self.MPModel.results = self.solver.solve(self.MPInstance, tee=True)
         print("\nMP instance solved.")
         MPSolverTime = self.solver._last_solve_time
         MPTimeLimitHit = self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
-        print(self.MPModel.results)
         resultsAsString = str(self.MPModel.results)
         MPUpperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
+
+        self.solver.options['timelimit'] = max(10, 600 - self.solver._last_solve_time)
 
         # SP
         SPBuildingTime = self.create_SP_instance(data)
@@ -487,10 +502,10 @@ class Planner:
         for k in self.MPInstance.k:
             for t in self.MPInstance.t:
                 for i1 in self.MPInstance.i:
-                    if(round(self.MPInstance.x[i1, k, t].value) == 1 and self.MPInstance.a[i1] == 0):
+                    if(round(self.SPInstance.xParam[i1, k, t]) == 1 and self.SPInstance.a[i1] == 0):
                         self.SPInstance.x[i1, k, t].fix(1)
                         fixed += 1
-                    if(round(self.MPInstance.x[i1, k, t].value) == 0):
+                    if(round(self.SPInstance.xParam[i1, k, t]) == 0):
                         self.SPInstance.x[i1, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
@@ -515,8 +530,7 @@ class Planner:
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
                         precedence = self.SPInstance.precedence[i]
-                        delayWeight = self.SPInstance.d[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, delayWeight, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict

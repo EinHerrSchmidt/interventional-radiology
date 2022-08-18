@@ -10,7 +10,6 @@ class Planner:
 
     DISCARDED = 0
     FREE = 1
-    FIXED = 2
 
     def __init__(self, timeLimit, gap, solver):
         self.MPModel = pyo.AbstractModel()
@@ -38,7 +37,11 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.d[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+
+    @staticmethod
+    def objective_function_MP(model):
+        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t) + 1 / (sum(model.An[alpha, t] for alpha in model.alpha for t in model.t) + sum(model.p[i] for i in model.i)) * sum(model.An[alpha, t] - sum(model.beta[alpha, i, t] * model.p[i] for i in model.t) for alpha in model.alpha for t in model.t )
 
     # one surgery per patient, at most
     @staticmethod
@@ -111,6 +114,11 @@ class Planner:
             rule=self.objective_function,
             sense=pyo.maximize)
 
+    def define_objective_MP(self, model):
+        model.objective = pyo.Objective(
+            rule=self.objective_function_MP,
+            sense=pyo.maximize)
+
     # assign an anesthetist if and only if a patient needs her
     @staticmethod
     def anesthetist_assignment_rule(model, i, t):
@@ -130,8 +138,6 @@ class Planner:
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        if(model.status[i1, k1, t] == Planner.FIXED or model.status[i2, k2, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
@@ -149,8 +155,6 @@ class Planner:
     def end_of_day_rule(model, i, k, t):
         if(model.status[i, k, t] == Planner.DISCARDED):
             return pyo.Constraint.Skip
-        if(model.status[i, k, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
         or(model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
@@ -166,8 +170,6 @@ class Planner:
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
@@ -178,8 +180,6 @@ class Planner:
         or(model.specialty[i1] != model.specialty[i2])
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -195,15 +195,7 @@ class Planner:
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FIXED):
-            return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
-
-    @staticmethod
-    def maximum_anesthesia_time_constraint_rule(model, t):
-        if(sum(model.a[i] for i in model.i) == 0):
-            return pyo.Constraint.Skip
-        return (sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A * 270)
 
     def define_anesthetists_number_param(self, model):
         model.A = pyo.Param(within=pyo.NonNegativeIntegers)
@@ -303,11 +295,19 @@ class Planner:
             self.SPModel.t,
             rule=self.exclusive_precedence_rule)
 
-    def define_maximum_anesthesia_time_constraint(self):
-        self.MPModel.maximum_anesthesia_time_constraint = pyo.Constraint(
-            self.MPModel.t,
-            rule=self.maximum_anesthesia_time_constraint_rule)
-
+    def define_common_components_MP(self, model):
+        self.define_sets(model)
+        self.define_x_variables(model)
+        self.define_parameters(model)
+        self.define_single_surgery_constraints(model)
+        self.define_surgery_time_constraints(model)
+        self.define_specialty_assignment_constraints(model)
+        self.define_anesthetists_number_param(model)
+        self.define_anesthetists_range_set(model)
+        self.define_beta_variables(model)
+        self.define_anesthetists_availability(model)
+        self.define_anesthetist_assignment_constraint(model)
+        # self.define_anesthetist_time_constraint(model)
 
     def define_common_components(self, model):
         self.define_sets(model)
@@ -318,21 +318,19 @@ class Planner:
         self.define_specialty_assignment_constraints(model)
         self.define_anesthetists_number_param(model)
         self.define_anesthetists_range_set(model)
+        self.define_beta_variables(model)
         self.define_anesthetists_availability(model)
+        self.define_anesthetist_assignment_constraint(model)
+        self.define_anesthetist_time_constraint(model)
 
     def define_MP(self):
-        self.define_common_components(self.MPModel)
-        self.define_maximum_anesthesia_time_constraint()
-        self.define_objective(self.MPModel)
+        self.define_common_components_MP(self.MPModel)
+        self.define_objective_MP(self.MPModel)
 
     def define_SP(self):
         self.define_common_components(self.SPModel)
 
         # SP's components
-        self.define_beta_variables(self.SPModel)
-        self.define_anesthetist_assignment_constraint(self.SPModel)
-        self.define_anesthetist_time_constraint(self.SPModel)
-
         self.define_x_parameters()
         self.define_status_parameters()
         self.define_lambda_variables()
@@ -363,6 +361,8 @@ class Planner:
         resultsAsString = str(self.MPModel.results)
         MPUpperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
+        self.solver.options['timelimit'] = max(10, 600 - self.solver._last_solve_time)
+
         # SP
         SPBuildingTime += self.create_SP_instance(data)
 
@@ -384,7 +384,8 @@ class Planner:
                     "SPTimeLimitHit": SPTimeLimitHit,
                     "MPobjectiveValue": pyo.value(self.MPInstance.objective),
                     "SPobjectiveValue": pyo.value(self.SPInstance.objective),
-                    "MPUpperBound": MPUpperBound}
+                    "MPUpperBound": MPUpperBound
+                    }
 
         print(self.SPModel.results)
         return runInfo
@@ -392,24 +393,17 @@ class Planner:
     def extend_data(self, data):
         xParamDict = {}
         statusDict = {}
-        for i in range(1, self.MPInstance.I + 1):
-            # patient i has been discarded
-            if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k for t in self.MPInstance.t) == 0):
-                for k in range(1, self.MPInstance.K + 1):
-                    for t in range(1, self.MPInstance.T + 1):
-                        statusDict[(i, k, t )] = Planner.DISCARDED
+        for i in self.MPInstance.i:
+            for t in self.MPInstance.t:
+                # patient scheduled on day t
+                if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
+                    for k in range(1, self.MPInstance.K + 1):
+                        statusDict[(i, k, t)] = Planner.FREE
+                        xParamDict[(i, k, t)] = 1
+                else:
+                    for k in range(1, self.MPInstance.K + 1):
+                        statusDict[(i, k, t)] = Planner.DISCARDED
                         xParamDict[(i, k, t)] = 0
-            else:
-                for t in range(1, self.MPInstance.T + 1):
-                    # patient i is scheduled on day t
-                    if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
-                        for k in range(1, self.MPInstance.K + 1):
-                            statusDict[(i, k, t)] = Planner.FREE
-                            xParamDict[(i, k, t)] = 1
-                    else:
-                        for k in range(1, self.MPInstance.K + 1):
-                            statusDict[(i, k, t)] = Planner.FIXED
-                            xParamDict[(i, k, t)] = 0
         data[None]['xParam'] = xParamDict
         data[None]['status'] = statusDict
 
@@ -439,9 +433,6 @@ class Planner:
                     if(self.SPInstance.status[i, k, t] == Planner.DISCARDED):
                         self.SPInstance.x[i, k, t].fix(0)
                         fixed += 1
-                    if(self.SPInstance.status[i, k, t] == Planner.FIXED):
-                        self.SPInstance.x[i, k, t].fix(0)
-                        fixed += 1
         print(str(fixed) + " x variables fixed.")
 
     def extract_solution(self):
@@ -464,8 +455,7 @@ class Planner:
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
                         precedence = self.SPInstance.precedence[i]
-                        delayWeight = self.SPInstance.d[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, delayWeight, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
