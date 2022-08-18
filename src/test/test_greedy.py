@@ -10,7 +10,7 @@ class TestGreedyRoomByRoom(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = Planner(strategy="default")
+        planner = Planner(packingStrategy="default", anesthetistAssignmentStrategy="WIS")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -46,7 +46,7 @@ class TestGreedyFirstFit(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = Planner(strategy="first fit")
+        planner = Planner(packingStrategy="first fit", anesthetistAssignmentStrategy="WIS")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -82,7 +82,7 @@ class TestGreedyBestFit(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = Planner(strategy="best fit")
+        planner = Planner(packingStrategy="best fit", anesthetistAssignmentStrategy="WIS")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

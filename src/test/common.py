@@ -1,5 +1,5 @@
 import unittest
-from data_maker import DataDescriptor, DataMaker, TruncatedNormalParameters
+from data_maker import DataDescriptor, DataMaker
 
 
 def build_data_dictionary():
@@ -13,12 +13,9 @@ def build_data_dictionary():
     dataDescriptor.operatingDayDuration = 270
     dataDescriptor.anesthesiaTime = 270
     dataDescriptor.delayWeight = 0.75
-    dataDescriptor.priorityDistribution = TruncatedNormalParameters(low=1,
-                                                                    high=120,
-                                                                    mean=60,
-                                                                    stdDev=10)
+
     dataMaker = DataMaker(seed=52876)
-    return dataMaker.create_data_dictionary(dataDescriptor, delayEstimate="UO")
+    return dataMaker.create_data_dictionary(dataDescriptor)
 
 
 class TestCommon(unittest.TestCase):
