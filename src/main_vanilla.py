@@ -14,7 +14,7 @@ if __name__ == '__main__':
     delayWeights = [0.25, 0.5, 0.75]
     delayEstimate = ["UO", "procedure"]
 
-    logging.basicConfig(filename='vanilla_times.log', encoding='utf-8', level=logging.INFO)
+    logging.basicConfig(filename='./times/vanilla_times.log', encoding='utf-8', level=logging.INFO)
     logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tSolverTime\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit\tUpper_bound\tGap\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
     for solver in solvers:
