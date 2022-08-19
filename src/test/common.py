@@ -13,6 +13,7 @@ def build_data_dictionary():
     dataDescriptor.operatingDayDuration = 270
     dataDescriptor.anesthesiaTime = 270
     dataDescriptor.delayWeight = 0.75
+    dataDescriptor.delayEstimation = "UO"
 
     dataMaker = DataMaker(seed=52876)
     return dataMaker.create_data_dictionary(dataDescriptor)
@@ -75,7 +76,7 @@ class TestCommon(unittest.TestCase):
                 if(patientsNumber <= 1):
                     continue
                 for i in range(1, patientsNumber):
-                    if(patients[i].covid < patients[i - 1].covid):
+                    if(patients[i].precedence < patients[i - 1].precedence):
                         sorted = False
         self.assertTrue(sorted)
 

@@ -13,8 +13,10 @@ if __name__ == '__main__':
     solvers = ["cplex"]
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
-    anesthesia = [0.2, 0.5, 0.8]
-    anesthetists = [1, 2]
+    anesthesia = [0.0]
+    anesthetists = [1]
+    delayWeights = [0.25, 0.5, 0.75]
+    delayEstimate = ["UO", "procedure"]
 
     if(variant):
         logging.basicConfig(filename='./times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
