@@ -40,6 +40,8 @@ if __name__ == '__main__':
                         dataDescriptor.specialtyBalance = 0.17
                         dataDescriptor.operatingDayDuration = 270
                         dataDescriptor.anesthesiaTime = 270
+                        dataDescriptor.delayWeight = 1
+                        dataDescriptor.delayEstimation = "UO"
 
                         dataMaker = DataMaker(seed=52876)
                         dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
@@ -76,4 +78,4 @@ if __name__ == '__main__':
                                         )
 
                         # sv.print_solution(solution)
-                        # sv.plot_graph(solution)
+                        sv.plot_graph(solution)

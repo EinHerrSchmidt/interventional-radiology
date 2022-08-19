@@ -158,20 +158,26 @@ class SolutionVisualizer:
                     anesthesia = "Y" if patient.anesthesia == 1 else "N"
                     anesthetist = "A" + str(patient.anesthetist) if patient.anesthetist != 0 else ""
                     if(precedence == 1):
-                        precedence = "Clean procedure"
+                        precedence = "Clean procedure, on schedule"
+                    elif(precedence == 2):
+                        precedence = "Clean procedure, delay expected"
                     elif(precedence == 3):
-                        precedence = "Dirty procedure"
+                        precedence = "Dirty procedure, on schedule"
+                    elif(precedence == 4):
+                        precedence = "Dirty procedure, delay expected"
                     elif(precedence == 5):
-                        precedence = "Covid-19 patient"
+                        precedence = "Covid-19 patient, on schedule"
+                    elif(precedence == 6):
+                        precedence = "Covid-19 patient, delay expected"
                     dataFrameToAdd = pd.DataFrame([dict(Start=start, Finish=finish, Room=room, Covid=covid, Precedence=precedence, Anesthesia=anesthesia, Anesthetist=anesthetist)])
                     df = pd.concat([df, dataFrameToAdd])
             dataFrames.append(df)
             dff = pd.concat([df, dff])
 
         # sort legend's labels
-        sortingOrder = ["Clean procedure",
-                        "Dirty procedure",
-                        "Covid-19 patient"]
+        sortingOrder = ["Clean procedure, on schedule", "Clean procedure, delay expected",
+                        "Dirty procedure, on schedule", "Dirty procedure, delay expected",
+                        "Covid-19 patient, on schedule", "Covid-19 patient, delay expected"]
         order  = []
         for precedenceValue in dff["Precedence"].tolist():
             if(not precedenceValue in order):
@@ -180,9 +186,9 @@ class SolutionVisualizer:
         dff = dff.set_index('Precedence')
         dff= dff.T[order].T.reset_index()
 
-        color_discrete_map = {'Clean procedure': '#38A6A5', 
-                                'Dirty procedure': '#73AF48',
-                                'Covid-19 patient': '#E17C05'}
+        color_discrete_map = {'Clean procedure, on schedule': '#38A6A5', 'Clean procedure, delay expected': '#0F8554',
+                                'Dirty procedure, on schedule': '#73AF48', 'Dirty procedure, delay expected': '#EDAD08',
+                                'Covid-19 patient, on schedule': '#E17C05', 'Covid-19 patient, delay expected': '#CC503E'}
 
         fig = px.timeline(dff,
                           x_start="Start",

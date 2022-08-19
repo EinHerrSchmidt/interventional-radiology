@@ -1,5 +1,6 @@
 from enum import Enum
 import math
+from urllib.request import DataHandler
 from matplotlib import scale
 from scipy.stats import truncnorm
 from scipy.stats import binom
@@ -25,6 +26,7 @@ class DataDescriptor:
         self._operatingDayDuration = None
         self._anesthesiaTime = None
         self._delayWeight = None
+        self._delayEstimation = None
 
     @property
     def patients(self):
@@ -116,6 +118,15 @@ class DataDescriptor:
     @delayWeight.setter
     def delayWeight(self, value):
         self._delayWeight = value
+
+    @property
+    def delayEstimation(self):
+        """Get the delay estimation criterion."""
+        return self._delayEstimation
+
+    @delayEstimation.setter
+    def delayEstimation(self, value):
+        self._delayEstimation = value
 
     def initialize(self, patients, days, anesthetists, covidFrequence, anesthesiaFrequence, specialtyBalance):
         self.patients = patients
@@ -266,15 +277,21 @@ class DataMaker:
                 delayWeights.append(1.0)
         return delayWeights
 
-    def compute_precedences(self, surgeryTypes):
+    def compute_precedences(self, surgeryTypes, delayFlags):
         precedences = []
         for i in range(0, len(surgeryTypes)):
-            if(surgeryTypes[i] == SurgeryType.CLEAN):
+            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 0):
                 precedences.append(1)
-            if(surgeryTypes[i] == SurgeryType.DIRTY):
+            if(surgeryTypes[i] == SurgeryType.CLEAN and delayFlags[i] == 1):
+                precedences.append(2)
+            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 0):
                 precedences.append(3)
-            if(surgeryTypes[i] == SurgeryType.COVID):
+            if(surgeryTypes[i] == SurgeryType.DIRTY and delayFlags[i] == 1):
+                precedences.append(4)
+            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 0):
                 precedences.append(5)
+            if(surgeryTypes[i] == SurgeryType.COVID and delayFlags[i] == 1):
+                precedences.append(6)
         return precedences
 
     def draw_UO(self, n):
@@ -332,7 +349,13 @@ class DataMaker:
         maxOperatingRoomTime = dataDescriptor.operatingDayDuration
         surgeryTypes = self.compute_surgery_types(operations, covidFlags)
 
-        precedences = self.compute_precedences(surgeryTypes)
+        delayFlags = None
+        if(dataDescriptor.delayEstimation == "UO"):
+            delayFlags = self.draw_delay_flags_by_UO(UOs)
+        if(dataDescriptor.delayEstimation == "procedure"):
+            delayFlags = self.draw_delay_flags_by_operation(operations)
+        delayWeights = self.compute_delay_weights(delayFlags, dataDescriptor.delayWeight)
+        precedences = self.compute_precedences(surgeryTypes, delayFlags)
 
         return {
             None: {
@@ -348,6 +371,7 @@ class DataMaker:
                 'p': self.create_dictionary_entry(operatingTimes, toRound=False),
                 'r': self.create_dictionary_entry(priorities, toRound=True),
                 'a': self.create_dictionary_entry(anesthesiaFlags, toRound=False),
+                'd': self.create_dictionary_entry(delayWeights, toRound=False),
                 'c': self.create_dictionary_entry(covidFlags, toRound=False),
                 'u': self.setup_u_parameter(precedences),
                 'patientId': self.create_dictionary_entry(ids, toRound=False),
@@ -374,13 +398,14 @@ class DataMaker:
             covid = data[None]['c'][(i + 1)]
             anesthesia = data[None]['a'][(i + 1)]
             precedence = data[None]['precedence'][(i + 1)]
+            delayWeight = data[None]['d'][(i + 1)]
             print(Patient(id=id,
                           priority=priority,
                           specialty=specialty,
                           operatingTime=operatingTime,
                           covid=covid,
                           precedence=precedence,
-                          delayWeight=None,
+                          delayWeight=delayWeight,
                           anesthesia=anesthesia,
                           room="N/A",
                           day="N/A",
