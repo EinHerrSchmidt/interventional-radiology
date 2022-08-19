@@ -273,14 +273,6 @@ class Planner:
                 self.fill_discarded_slots()
             self.compute_patients_order()
 
-    def compute_objective_value(self):
-        value = 0
-        for k in range(1, self.dataDictionary[None]["K"][None] + 1):
-            for t in range(1, self.dataDictionary[None]["T"][None] + 1):
-                for p in self.solution[(k, t)]:
-                    value = value + p.priority
-        return value
-
     def extract_solution(self):
         return self.solution
 

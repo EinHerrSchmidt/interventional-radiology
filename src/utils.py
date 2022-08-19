@@ -132,6 +132,34 @@ class SolutionVisualizer:
                 operatedPatients += len(solution[(k, t)])
         return operatedPatients
 
+    def compute_solution_partitioning_by_precedence(self, solution):
+        KT = max(solution.keys())
+        K = KT[0]
+        T = KT[1]
+
+        PO = 0
+        PR = 0
+        SO = 0
+        SR = 0
+        CO = 0
+        CR = 0
+        for t in range(1, T + 1):
+            for k in range(1, K + 1):
+                for patient in solution[(k, t)]:
+                    if(patient.precedence == 1):
+                        PO += 1
+                    elif(patient.precedence == 2):
+                        PR += 1
+                    elif(patient.precedence == 3):
+                        SO += 1
+                    elif(patient.precedence == 4):
+                        SR += 1
+                    elif(patient.precedence == 5):
+                        CO += 1
+                    elif(patient.precedence == 6):
+                        CR += 1
+
+        return [PO, PR, SO, SR, CO, CR]
 
     def plot_graph(self, solution):
         if(solution is None):
