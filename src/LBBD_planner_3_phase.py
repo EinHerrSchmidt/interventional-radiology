@@ -360,6 +360,7 @@ class Planner:
         iterations = 0
         overallSPBuildingTime = 0
         MPTimeLimitHit = False
+        SPTimeLimitHit = False
         worstMPBoundTimeLimitHit = 0
         fail = False
         objectiveValue = -1
@@ -415,6 +416,7 @@ class Planner:
             self.SPModel.results = self.solver.solve(self.SPInstance, tee=True)
             print("SP instance solved.")
             solverTime += self.solver._last_solve_time
+            SPTimeLimitHit = SPTimeLimitHit or self.SPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
 
             # no solution found, but solver status is fine: need to add a cut
             if(self.SPModel.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
@@ -437,7 +439,7 @@ class Planner:
                     "statusOk": statusOk,
                     "objectiveValue": objectiveValue,
                     "MPTimeLimitHit": MPTimeLimitHit,
-                    "SPTimeLimitHit": -1,
+                    "SPTimeLimitHit": SPTimeLimitHit,
                     "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
                     "iterations": iterations,
                     "fail": fail
