@@ -89,5 +89,5 @@ if __name__ == '__main__':
                                                 + str(precedencePartitioning[5])
                                                 )
 
-                                # sv.print_solution(solution)
-                                # sv.plot_graph(solution)
+                                sv.print_solution(solution)
+                                sv.plot_graph(solution)
