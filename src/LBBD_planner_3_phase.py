@@ -21,22 +21,25 @@ class Planner:
         self.solver = pyo.SolverFactory(solver)
         self.iterationsCap = iterationsCap
         if(solver == "cplex"):
-            self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = gap
+            self.timeLimit = 'timelimit'
+            self.gap = 'mipgap'
             self.solver.options['emphasis'] = "mip 2"
         if(solver == "gurobi"):
-            self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = gap
+            self.timeLimit = 'timelimit'
+            self.gap = 'mipgap'
             self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
-            self.solver.options['seconds'] = timeLimit
-            self.solver.options['ratiogap'] = gap
+            self.timeLimit = 'seconds'
+            self.gap = 'ratiogap'
             self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
             self.solver.options['cuts'] = "on"
             self.solver.options['preprocess'] = "on"
             # self.solver.options['printingOptions'] = "normal"
+
+        self.solver.options[self.timeLimit] = timeLimit
+        self.solver.options[self.gap] = gap
 
     @staticmethod
     def objective_function(model):
@@ -373,8 +376,8 @@ class Planner:
             MPTimeLimitHit = MPTimeLimitHit or self.MPModel.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
             print(float(re.search("Upper bound: -*(\d*.\d*)", str(self.MPModel.results)).group(1)))
 
-            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
-            if(self.solver.options['timelimit'] <= 0):
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - self.solver._last_solve_time
+            if(self.solver.options[self.timeLimit] <= 0):
                 fail = True
                 break
 
@@ -386,8 +389,8 @@ class Planner:
             self.IPModel.results = self.solver.solve(self.IPInstance, tee=False)
             print("\nIP instance solved.")
 
-            self.solver.options['timelimit'] = self.solver.options['timelimit'] - self.solver._last_solve_time
-            if(self.solver.options['timelimit'] <= 0):
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - self.solver._last_solve_time
+            if(self.solver.options[self.timeLimit] <= 0):
                 fail = True
                 break
 

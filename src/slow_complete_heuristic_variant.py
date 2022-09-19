@@ -18,22 +18,25 @@ class Planner:
         self.SPInstance = None
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
-            self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = gap
+            self.timeLimit = 'timelimit'
+            self.gap = 'mipgap'
             self.solver.options['emphasis'] = "mip 2"
         if(solver == "gurobi"):
-            self.solver.options['timelimit'] = timeLimit
-            self.solver.options['mipgap'] = gap
+            self.timeLimit = 'timelimit'
+            self.gap = 'mipgap'
             self.solver.options['mipfocus'] = 2
         if(solver == "cbc"):
-            self.solver.options['seconds'] = timeLimit
-            self.solver.options['ratiogap'] = gap
+            self.timeLimit = 'seconds'
+            self.gap = 'ratiogap'
             self.solver.options['heuristics'] = "on"
             # self.solver.options['round'] = "on"
             # self.solver.options['feas'] = "on"
             self.solver.options['cuts'] = "on"
             self.solver.options['preprocess'] = "on"
             # self.solver.options['printingOptions'] = "normal"
+
+        self.solver.options[self.timeLimit] = timeLimit
+        self.solver.options[self.gap] = gap
 
     @staticmethod
     def objective_function(model):
@@ -361,7 +364,7 @@ class Planner:
         resultsAsString = str(self.MPModel.results)
         MPUpperBound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
-        self.solver.options['timelimit'] = max(10, 600 - self.solver._last_solve_time)
+        self.solver.options[self.timeLimit] = max(10, 600 - self.solver._last_solve_time)
 
         # SP
         SPBuildingTime += self.create_SP_instance(data)

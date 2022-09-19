@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     variant = sys.argv[1] == "True"
 
-    solvers = ["cplex"]
+    solvers = ["cbc"]
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
     anesthesia = [0.2, 0.5, 0.8]
