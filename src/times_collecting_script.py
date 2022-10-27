@@ -3,6 +3,10 @@ import os
 if __name__ == '__main__':
     if(not os.path.isdir("./times")):
         os.mkdir("./times")
+    # lagrangian "slow" complete heuristic
+    os.system("python main_SCE.py False")
+    # lagrangian "fast" complete heuristic
+    os.system("python main_FCE.py True")
     # "slow" complete heuristic
     os.system("python main_SCE.py False")
     # "fast" complete heuristic
