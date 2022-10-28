@@ -133,9 +133,6 @@ class Planner:
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        if(model.status[i1, k1, t] == Planner.FIXED and model.status[i2, k2, t] == Planner.FIXED
-        and model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms, same day
@@ -180,9 +177,6 @@ class Planner:
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
-        and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
-            return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
@@ -193,9 +187,6 @@ class Planner:
         or(model.specialty[i1] != model.specialty[i2])
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
-            and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
@@ -210,9 +201,6 @@ class Planner:
         or(model.specialty[i1] != model.specialty[i2])
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED
-           and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
