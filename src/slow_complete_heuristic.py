@@ -40,17 +40,31 @@ class Planner:
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        N = 1 / (sum(model.r[i] for i in model.i))
+        R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
+        return sum(model.d[i] * model.x_d[i, k, t] for i in model.i for k in model.k for t in model.t) + N * R
 
     # one surgery per patient, at most
     @staticmethod
     def single_surgery_rule(model, i):
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
+    @staticmethod
+    def single_surgery_delay_rule(model, i):
+        return sum(model.x_d[i, k, t] for k in model.k for t in model.t) <= 1
+
+    @staticmethod
+    def robustness_constraints_rule(model, k, t):
+        return sum(model.x_d[i, k, t] for i in model.i) <= 3
+
+    @staticmethod
+    def delay_implication_constraint_rule(model, i, k, t):
+        return model.x[i, k, t] >= model.x_d[i, k, t]
+
     # estimated surgery times cannot exceed operating room/surgical team time availability
     @staticmethod
     def surgery_time_rule(model, k, t):
-        return sum(model.p[i] * model.x[i, k, t] for i in model.i) <= model.s[k, t]
+        return sum(model.p[i] * model.x[i, k, t] + model.d[i] * model.x_d[i, k, t] for i in model.i)<= model.s[k, t]
 
     # each patient must be assigned to a room matching her specialty need
     @staticmethod
@@ -61,6 +75,21 @@ class Planner:
         model.single_surgery_constraint = pyo.Constraint(
             model.i,
             rule=self.single_surgery_rule)
+    def define_single_surgery_delay_constraints(self, model):
+        model.single_surgery_delay_constraint = pyo.Constraint(
+            model.i,
+            rule=self.single_surgery_delay_rule)
+    def define_robustness_constraints(self, model):
+        model.robustness_constraint = pyo.Constraint(
+            model.k,
+            model.t,
+            rule=self.robustness_constraints_rule)
+    def define_delay_implication_constraint(self, model):
+        model.delay_implication_constraint = pyo.Constraint(
+            model.i,
+            model.k,
+            model.t,
+            rule=self.delay_implication_constraint_rule)
     def define_surgery_time_constraints(self, model):
         model.surgery_time_constraint = pyo.Constraint(
             model.k,
@@ -94,6 +123,7 @@ class Planner:
 
     def define_parameters(self, model):
         model.p = pyo.Param(model.i)
+        model.d = pyo.Param(model.i)
         model.r = pyo.Param(model.i)
         model.s = pyo.Param(model.k, model.t)
         model.a = pyo.Param(model.i)
@@ -152,7 +182,7 @@ class Planner:
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
         or(model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -164,7 +194,7 @@ class Planner:
         or(model.specialty[i1] == 1 and (k == 3 or k == 4))
         or(model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -292,8 +322,12 @@ class Planner:
     def define_common_components(self, model):
         self.define_sets(model)
         self.define_x_variables(model)
+        self.define_x_delay_variables(model)
         self.define_parameters(model)
         self.define_single_surgery_constraints(model)
+        self.define_single_surgery_delay_constraints(model)
+        self.define_robustness_constraints(model)
+        self.define_delay_implication_constraint(model)
         self.define_surgery_time_constraints(model)
         self.define_specialty_assignment_constraints(model)
         self.define_anesthetists_number_param(model)
@@ -302,6 +336,12 @@ class Planner:
         self.define_anesthetists_availability(model)
         self.define_anesthetist_assignment_constraint(model)
         self.define_anesthetist_time_constraint(model)
+
+    def define_x_delay_variables(self, model):
+        model.x_d = pyo.Var(model.i,
+                        model.k,
+                       model.t,
+                       domain=pyo.Binary)
 
     def define_MP(self):
         self.define_common_components(self.MPModel)
@@ -425,8 +465,10 @@ class Planner:
                 for i in self.SPInstance.i:
                     if(round(self.SPInstance.x[i, k, t].value) == 1):
                         p = self.SPInstance.p[i]
+                        arrival_delay = self.SPInstance.d[i]
                         c = self.SPInstance.c[i]
                         a = self.SPInstance.a[i]
+                        d = round(self.SPInstance.x_d[i, k, t].value)
                         anesthetist = 0
                         for alpha in self.SPInstance.alpha:
                             if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
@@ -435,7 +477,7 @@ class Planner:
                         specialty = self.SPInstance.specialty[i]
                         priority = self.SPInstance.r[i]
                         precedence = self.SPInstance.precedence[i]
-                        patients.append(Patient(i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
+                        patients.append(Patient(i, priority, k, specialty, t, p, arrival_delay, c, precedence, None, a, anesthetist, order, d))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict

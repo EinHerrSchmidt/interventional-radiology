@@ -151,19 +151,21 @@ class SolutionVisualizer:
                 for idx in range(0, len(patients)):
                     patient = patients[idx]
                     start = datetime.datetime(1970, 1, t, 8, 0, 0) + datetime.timedelta(minutes=round(patient.order))
-                    finish = start + datetime.timedelta(minutes=round(patient.operatingTime))
+                    arrival_delay = patient.arrival_delay * patient.delay
+                    finish = start + datetime.timedelta(minutes=round(patient.operatingTime)) + datetime.timedelta(minutes=round(arrival_delay))
                     room = "S" + str(k)
                     covid = "Y" if patient.covid == 1 else "N"
                     precedence = patient.precedence
                     anesthesia = "Y" if patient.anesthesia == 1 else "N"
                     anesthetist = "A" + str(patient.anesthetist) if patient.anesthetist != 0 else ""
+                    delay = patient.delay
                     if(precedence == 1):
                         precedence = "Clean procedure"
                     elif(precedence == 3):
                         precedence = "Dirty procedure"
                     elif(precedence == 5):
                         precedence = "Covid-19 patient"
-                    dataFrameToAdd = pd.DataFrame([dict(Start=start, Finish=finish, Room=room, Covid=covid, Precedence=precedence, Anesthesia=anesthesia, Anesthetist=anesthetist)])
+                    dataFrameToAdd = pd.DataFrame([dict(Start=start, Finish=finish, Room=room, Covid=covid, Precedence=precedence, Anesthesia=anesthesia, Anesthetist=anesthetist, Delay=delay)])
                     df = pd.concat([df, dataFrameToAdd])
             dataFrames.append(df)
             dff = pd.concat([df, dff])
@@ -192,7 +194,7 @@ class SolutionVisualizer:
                           text="Anesthetist",
                           labels={"Start": "Procedure start", "Finish": "Procedure end", "Room": "Operating room",
                                   "Covid": "Covid patient", "Precedence": "Procedure Type and Delay", "Anesthesia": "Need for anesthesia", "Anesthetist": "Assigned anesthetist"},
-                          hover_data=["Anesthesia", "Anesthetist", "Precedence", "Covid"],
+                          hover_data=["Anesthesia", "Anesthetist", "Precedence", "Covid", "Delay"],
                           color_discrete_map=color_discrete_map
                           )
 
@@ -238,12 +240,14 @@ class SolutionVisualizer:
                                             specialty=dataDictionary[None]["specialty"][i],
                                             day=0,
                                             operatingTime=dataDictionary[None]["p"][i],
+                                            arrival_delay=dataDictionary[None]["d"][i],
                                             covid=dataDictionary[None]["c"][i],
                                             precedence=dataDictionary[None]["precedence"][i],
                                             delayWeight=None,
                                             anesthesia=dataDictionary[None]["a"][i],
                                             anesthetist=0,
-                                            order=0)
+                                            order=0,
+                                            delay="N/A")
                                     )
 
         specialty1TotalPatients = sum(map(lambda _: 1, list(filter(lambda p: p.specialty == 1, overallPatients))))

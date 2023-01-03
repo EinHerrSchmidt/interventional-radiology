@@ -140,6 +140,7 @@ class DataMaker:
         self.surgeryFrequencyMapping = sd.surgeryFrequencyMapping
         self.UOFrequencyMapping = sd.UOFrequencyMapping
         self.surgeryRoomOccupancyMapping = sd.surgeryRoomOccupancyMapping
+        self.surgeryRoomArrivalDelayMapping = sd.surgeryRoomArrivalDelayMapping
         self.delayFrequencyByOperation = sd.delayFrequencyByOperation
         self.delayFrequencyByUO = sd.delayFrequencyByUO
         self.operationGivenUO = sd.operationGivenUO
@@ -317,12 +318,19 @@ class DataMaker:
             times.append(self.surgeryRoomOccupancyMapping[operation])
         return times
 
+    def compute_arrival_delays(self, operations):
+        times = []
+        for operation in operations:
+            times.append(self.surgeryRoomArrivalDelayMapping[operation])
+        return times
+
     def create_data_dictionary(self, dataDescriptor: DataDescriptor):
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms, dataDescriptor.days, dataDescriptor.operatingDayDuration)
         anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists, dataDescriptor.days, dataDescriptor.anesthesiaTime)
         UOs = self.draw_UO(dataDescriptor.patients)
         operations = self.draw_operations_given_UO(UOs)
-        operatingTimes = operatingTimes = self.compute_operating_times(operations)
+        operatingTimes = self.compute_operating_times(operations)
+        arrivalDelays = self.compute_arrival_delays(operations)
         priorities = self.generate_uniform_sample(dataDescriptor.patients, 10, 120)
         anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.anesthesiaFrequence, isSpecialty=False)
         covidFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.covidFrequence, isSpecialty=False)
@@ -346,7 +354,8 @@ class DataMaker:
                 'An': anesthetistsTimes,
                 'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
                 'p': self.create_dictionary_entry(operatingTimes, toRound=False),
-                'r': self.create_dictionary_entry(priorities, toRound=True),
+                'd': self.create_dictionary_entry(arrivalDelays, toRound=False),
+                'r': self.create_dictionary_entry(priorities, toRound=False),
                 'a': self.create_dictionary_entry(anesthesiaFlags, toRound=False),
                 'c': self.create_dictionary_entry(covidFlags, toRound=False),
                 'u': self.setup_u_parameter(precedences),
@@ -371,6 +380,7 @@ class DataMaker:
             priority = data[None]['r'][(i + 1)]
             specialty = data[None]['specialty'][(i + 1)]
             operatingTime = data[None]['p'][(i + 1)]
+            arrival_delay = data[None]['d'][(i + 1)]
             covid = data[None]['c'][(i + 1)]
             anesthesia = data[None]['a'][(i + 1)]
             precedence = data[None]['precedence'][(i + 1)]
@@ -378,6 +388,7 @@ class DataMaker:
                           priority=priority,
                           specialty=specialty,
                           operatingTime=operatingTime,
+                          arrival_delay=arrival_delay,
                           covid=covid,
                           precedence=precedence,
                           delayWeight=None,
@@ -385,6 +396,7 @@ class DataMaker:
                           room="N/A",
                           day="N/A",
                           anesthetist="N/A",
-                          order="N/A"
+                          order="N/A",
+                          delay="N/A"
                           ))
         print("\n")

@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     variant = sys.argv[1] == "True"
 
-    solvers = ["cbc"]
+    solvers = ["cplex"]
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
     anesthesia = [0.2, 0.5, 0.8]
@@ -74,5 +74,5 @@ if __name__ == '__main__':
                                         + str(usageInfo["Specialty2SelectedRatio"])
                                         )
 
-                        # sv.print_solution(solution)
-                        # sv.plot_graph(solution)
+                        sv.print_solution(solution)
+                        sv.plot_graph(solution)
