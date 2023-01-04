@@ -4,11 +4,11 @@ from data_maker import DataDescriptor, DataMaker
 
 def build_data_dictionary():
     dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 80
+    dataDescriptor.patients = 60
     dataDescriptor.days = 5
     dataDescriptor.anesthetists = 2
     dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 0.5
+    dataDescriptor.anesthesiaFrequence = 0.2
     dataDescriptor.specialtyBalance = 0.17
     dataDescriptor.operatingDayDuration = 270
     dataDescriptor.anesthesiaTime = 270

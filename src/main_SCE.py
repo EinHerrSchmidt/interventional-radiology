@@ -2,8 +2,7 @@ import logging
 import sys
 import time
 from data_maker import DataDescriptor, DataMaker
-import slow_complete_heuristic as sce
-import slow_complete_heuristic_variant as scev
+from planners import SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
@@ -26,9 +25,9 @@ if __name__ == '__main__':
                         
                         planner = None
                         if(variant):
-                            planner = scev.Planner(timeLimit=590, gap=0.005, solver=solver)
+                            planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
                         else:
-                            planner = sce.Planner(timeLimit=590, gap=0.005, solver=solver)
+                            planner = SlowCompleteHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 

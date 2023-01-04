@@ -2,8 +2,7 @@ import logging
 import sys
 import time
 from data_maker import DataDescriptor, DataMaker
-import fast_complete_heuristic as fce
-import fast_complete_heuristic_variant as fcev
+from planners import FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
@@ -26,9 +25,9 @@ if __name__ == '__main__':
                         
                         planner = None
                         if(variant):
-                            planner = fcev.Planner(timeLimit=590, gap = 0.0, solver=solver)
+                            planner = FastCompleteLagrangeanHeuristicPlanner(timeLimit=590, gap = 0.0, solver=solver)
                         else:
-                            planner = fce.Planner(timeLimit=590,gap = 0.0, solver=solver)
+                            planner = FastCompleteHeuristicPlanner(timeLimit=590,gap = 0.0, solver=solver)
 
                         dataDescriptor = DataDescriptor()
 

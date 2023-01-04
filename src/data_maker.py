@@ -149,13 +149,6 @@ class DataMaker:
         sample = uniformDistribution.rvs(patients)
         return sample
 
-    def generate_truncnorm_sample(self, patients, lower, upper, mean, stdDev):
-        a = (lower - mean) / stdDev
-        b = (upper - mean) / stdDev
-        truncatedNormal = truncnorm(a, b, loc=mean, scale=stdDev)
-        sample = truncatedNormal.rvs(patients)
-        return sample
-
     def generate_binomial_sample(self, patients, p, isSpecialty):
         sample = binom.rvs(1, p, size=patients)
         if(isSpecialty):

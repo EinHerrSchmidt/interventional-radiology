@@ -1,9 +1,8 @@
 import unittest
 
-import slow_complete_heuristic as SCE
-import slow_complete_heuristic_variant as SCEV
 from test.common import build_data_dictionary
 from test.common import TestCommon
+from planners import SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner
 
 
 class TestSCEStandard(TestCommon):
@@ -13,7 +12,7 @@ class TestSCEStandard(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = SCE.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = SlowCompleteHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -52,7 +51,7 @@ class TestSCEVariant(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = SCEV.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

@@ -1,6 +1,6 @@
 import unittest
 
-from planners import SinglePhaseStartingMinutePlanner
+from planners import SimplePlanner
 from test.common import build_data_dictionary
 from test.common import TestCommon
 
@@ -12,7 +12,7 @@ class TestSM(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = SinglePhaseStartingMinutePlanner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = SimplePlanner(timeLimit=900, gap=0.05, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

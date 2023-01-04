@@ -2,11 +2,11 @@ import logging
 import sys
 import time
 from data_maker import DataDescriptor, DataMaker
-import planners
+from planners import SimplePlanner
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
-    solvers = ["cplex"]
+    solvers = ["cbc"]
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
     anesthesia = [0.2, 0.5, 0.8]
@@ -21,7 +21,7 @@ if __name__ == '__main__':
                 for a in anesthesia:
                     for at in anesthetists:
                         
-                        planner = planners.SinglePhaseStartingMinutePlanner(600, 0.0, solver)
+                        planner = SimplePlanner(600, 0.0, solver)
 
                         dataDescriptor = DataDescriptor()
 

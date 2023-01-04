@@ -1,9 +1,8 @@
 import unittest
 
-import fast_complete_heuristic as FCE
-import fast_complete_heuristic_variant as FCEV
 from test.common import build_data_dictionary
 from test.common import TestCommon
+from planners import FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner
 
 
 class TestFCEStandard(TestCommon):
@@ -11,7 +10,7 @@ class TestFCEStandard(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = FCE.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = FastCompleteHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -48,7 +47,7 @@ class TestFCEVariant(TestCommon):
     @classmethod
     def setUpClass(self):
         self.dataDictionary = build_data_dictionary()
-        planner = FCEV.Planner(timeLimit=900, gap=0.01, solver="cplex")
+        planner = FastCompleteLagrangeanHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
