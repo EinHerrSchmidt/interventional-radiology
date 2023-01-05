@@ -393,17 +393,17 @@ class SimplePlanner(Planner):
 
         timeLimitHit = self.model.results.solver.termination_condition in [
             TerminationCondition.maxTimeLimit]
-        statusOk = self.model.results.solver.status == SolverStatus.ok
+        status_ok = self.model.results.solver.status == SolverStatus.ok
 
-        runInfo = {"BuildingTime": buildingTime,
-                   "StatusOK": statusOk,
-                   "SolverTime": self.solver._last_solve_time,
-                   "TimeLimitHit": timeLimitHit,
-                   "UpperBound": upperBound,
-                   "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
-                   }
+        run_info = {"BuildingTime": buildingTime,
+                    "status_ok": status_ok,
+                    "SolverTime": self.solver._last_solve_time,
+                    "TimeLimitHit": timeLimitHit,
+                    "UpperBound": upperBound,
+                    "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
+                    }
 
-        return runInfo
+        return run_info
 
 
 class TwoPhasePlanner(Planner):
@@ -439,9 +439,9 @@ class TwoPhasePlanner(Planner):
         self.define_objective(self.MP_model)
 
     def define_x_parameters(self):
-        self.SP_model.xParam = pyo.Param(self.SP_model.i,
-                                         self.SP_model.k,
-                                         self.SP_model.t)
+        self.SP_model.x_param = pyo.Param(self.SP_model.i,
+                                          self.SP_model.k,
+                                          self.SP_model.t)
 
     def define_status_parameters(self):
         self.SP_model.status = pyo.Param(self.SP_model.i,
@@ -590,47 +590,45 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         # MP
         print("Solving MP instance...")
         print(self.solver)
-        self.MP_model.results = self.solver.solve(
-            self.MP_instance, tee=True, keepfiles=True)
+        self.MP_model.results = self.solver.solve(self.MP_instance, tee=True)
         print("\nMP instance solved.")
-        MPSolverTime = self.solver._last_solve_time
-        MPTimeLimitHit = self.MP_model.results.solver.termination_condition in [
+        MP_solver_time = self.solver._last_solve_time
+        MP_time_limit_hit = self.MP_model.results.solver.termination_condition in [
             TerminationCondition.maxTimeLimit]
         resultsAsString = str(self.MP_model.results)
-        MPUpperBound = float(
+        MP_upper_bound = float(
             re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
         self.solver.options[self.timeLimit] = max(
             10, 600 - self.solver._last_solve_time)
 
         # SP
-        SPBuildingTime = self.create_SP_instance(data)
+        SP_building_time = self.create_SP_instance(data)
 
         self.fix_SP_x_variables()
         print("Solving SP instance...")
-        self.SP_model.results = self.solver.solve(
-            self.SP_instance, tee=True, keepfiles=True)
+        self.SP_model.results = self.solver.solve(self.SP_instance, tee=True)
         print("SP instance solved.")
-        SPSolverTime = self.solver._last_solve_time
-        SPTimeLimitHit = self.SP_model.results.solver.termination_condition in [
+        SP_solver_time = self.solver._last_solve_time
+        SP_time_limit_hit = self.SP_model.results.solver.termination_condition in [
             TerminationCondition.maxTimeLimit]
 
-        statusOk = self.SP_model.results.solver.status == SolverStatus.ok
+        status_ok = self.SP_model.results.solver.status == SolverStatus.ok
 
-        runInfo = {"MPSolverTime": MPSolverTime,
-                   "SPSolverTime": SPSolverTime,
-                   "MPBuildingTime": MPBuildingTime,
-                   "SPBuildingTime": SPBuildingTime,
-                   "statusOk": statusOk,
-                   "MPTimeLimitHit": MPTimeLimitHit,
-                   "SPTimeLimitHit": SPTimeLimitHit,
-                   "MPobjectiveValue": pyo.value(self.MP_instance.objective),
-                   "SPobjectiveValue": pyo.value(self.SP_instance.objective),
-                   "MPUpperBound": MPUpperBound,
-                   "objectiveFunctionLB": 0}
+        run_info = {"MP_solver_time": MP_solver_time,
+                    "SP_solver_time": SP_solver_time,
+                    "MPBuildingTime": MPBuildingTime,
+                    "SP_building_time": SP_building_time,
+                    "status_ok": status_ok,
+                    "MP_time_limit_hit": MP_time_limit_hit,
+                    "SP_time_limit_hit": SP_time_limit_hit,
+                    "MPobjectiveValue": pyo.value(self.MP_instance.objective),
+                    "SPobjectiveValue": pyo.value(self.SP_instance.objective),
+                    "MP_upper_bound": MP_upper_bound,
+                    "objectiveFunctionLB": 0}
 
         print(self.SP_model.results)
-        return runInfo
+        return run_info
 
 
 class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
@@ -639,32 +637,32 @@ class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
-        i1AllDay = 0
-        i2AllDay = 0
+        i1_all_day = 0
+        i2_all_day = 0
         for k in model.k:
             # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
             if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED):
                 return pyo.Constraint.Skip
             if(model.status[i1, k, t] == Planner.FIXED or model.status[i1, k, t] == Planner.FREE):
-                i1AllDay += 1
+                i1_all_day += 1
             if(model.status[i2, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FREE):
-                i2AllDay += 1
-        if(i1AllDay == 0 or i2AllDay == 0):
+                i2_all_day += 1
+        if(i1_all_day == 0 or i2_all_day == 0):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def extend_data(self, data):
-        statusDict = {}
+        status_dict = {}
         for i in range(1, self.MP_instance.I + 1):
             for k in range(1, self.MP_instance.K + 1):
                 for t in range(1, self.MP_instance.T + 1):
                     if(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 1):
-                        statusDict[(i, k, t)] = Planner.FREE
+                        status_dict[(i, k, t)] = Planner.FREE
                     elif(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 0):
-                        statusDict[(i, k, t)] = Planner.FIXED
+                        status_dict[(i, k, t)] = Planner.FIXED
                     else:
-                        statusDict[(i, k, t)] = Planner.DISCARDED
-        data[None]['status'] = statusDict
+                        status_dict[(i, k, t)] = Planner.DISCARDED
+        data[None]['status'] = status_dict
 
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
@@ -707,26 +705,26 @@ class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
         # if patients not on same day
-        if(sum(model.xParam[i1, k, t] for k in model.k) == 0 or sum(model.xParam[i2, k, t] for k in model.k) == 0):
+        if(sum(model.x_param[i1, k, t] for k in model.k) == 0 or sum(model.x_param[i2, k, t] for k in model.k) == 0):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def extend_data(self, data):
-        xParamDict = {}
-        statusDict = {}
+        x_param_dict = {}
+        status_dict = {}
         for i in self.MP_instance.i:
             for t in self.MP_instance.t:
                 # patient scheduled on day t
                 if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
                     for k in range(1, self.MP_instance.K + 1):
-                        statusDict[(i, k, t)] = Planner.FREE
-                        xParamDict[(i, k, t)] = 1
+                        status_dict[(i, k, t)] = Planner.FREE
+                        x_param_dict[(i, k, t)] = 1
                 else:
                     for k in range(1, self.MP_instance.K + 1):
-                        statusDict[(i, k, t)] = Planner.DISCARDED
-                        xParamDict[(i, k, t)] = 0
-        data[None]['xParam'] = xParamDict
-        data[None]['status'] = statusDict
+                        status_dict[(i, k, t)] = Planner.DISCARDED
+                        x_param_dict[(i, k, t)] = 0
+        data[None]['x_param'] = x_param_dict
+        data[None]['status'] = status_dict
 
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
@@ -769,7 +767,7 @@ class LBBDPlanner(TwoPhasePlanner):
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-           or (model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)):
+           or (model.x_param[i1, k1, t] + model.x_param[i2, k2, t] < 2)):
             return pyo.Constraint.Skip
         return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
@@ -778,22 +776,22 @@ class LBBDPlanner(TwoPhasePlanner):
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             return pyo.Constraint.Skip
-        i1AllDay = 0
-        i2AllDay = 0
+        i1_all_day = 0
+        i2_all_day = 0
         for k in model.k:
             # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
-            if(model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
+            if(model.x_param[i1, k, t] + model.x_param[i2, k, t] == 2):
                 return pyo.Constraint.Skip
-            i1AllDay += model.xParam[i1, k, t]
-            i2AllDay += model.xParam[i2, k, t]
-        if(i1AllDay == 0 or i2AllDay == 0):
+            i1_all_day += model.x_param[i1, k, t]
+            i2_all_day += model.x_param[i2, k, t]
+        if(i1_all_day == 0 or i2_all_day == 0):
             return pyo.Constraint.Skip
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     # ensure gamma plus operation time does not exceed end of day
     @staticmethod
     def end_of_day_rule(model, i, k, t):
-        if(model.find_component('xParam') and model.xParam[i, k, t] == 0
+        if(model.find_component('x_param') and model.x_param[i, k, t] == 0
            or (model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
@@ -802,7 +800,7 @@ class LBBDPlanner(TwoPhasePlanner):
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        if(i1 == i2 or (model.find_component('x_param') and model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
@@ -811,7 +809,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
-        if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        if(i1 == i2 or model.u[i1, i2] == 0 or (model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
@@ -821,7 +819,7 @@ class LBBDPlanner(TwoPhasePlanner):
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
     @staticmethod
     def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+        if(i1 >= i2 or (model.find_component('x_param') and model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
@@ -850,7 +848,7 @@ class LBBDPlanner(TwoPhasePlanner):
                         dict[(i, k, t)] = 1
                     else:
                         dict[(i, k, t)] = 0
-        data[None]['xParam'] = dict
+        data[None]['x_param'] = dict
 
     def solve_model(self, data):
         self.define_MP()
@@ -860,9 +858,9 @@ class LBBDPlanner(TwoPhasePlanner):
 
         solverTime = 0
         iterations = 0
-        overallSPBuildingTime = 0
-        MPTimeLimitHit = False
-        SPTimeLimitHit = False
+        total_SP_building_time = 0
+        MP_time_limit_hit = False
+        SP_time_limit_hit = False
         worstMPBoundTimeLimitHit = 0
         fail = False
         objectiveValue = -1
@@ -874,7 +872,7 @@ class LBBDPlanner(TwoPhasePlanner):
                 self.MP_instance, tee=True)
             print("\nMP instance solved.")
             solverTime += self.solver._last_solve_time
-            MPTimeLimitHit = MPTimeLimitHit or self.MP_model.results.solver.termination_condition in [
+            MP_time_limit_hit = MP_time_limit_hit or self.MP_model.results.solver.termination_condition in [
                 TerminationCondition.maxTimeLimit]
 
             self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
@@ -885,7 +883,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
             # if we hit the time limit, we keep track of the worst possible bound (i.e. the highest) in order to give an estimate about
             # how bad our solution can be, given that time limit was hit at least once
-            if(MPTimeLimitHit):
+            if(MP_time_limit_hit):
                 MPresultsAsString = str(self.MP_model.results)
                 worstMPBoundCandidate = float(
                     re.search("Upper bound: -*(\d*.\d*)", MPresultsAsString).group(1))
@@ -893,7 +891,7 @@ class LBBDPlanner(TwoPhasePlanner):
                     worstMPBoundTimeLimitHit = worstMPBoundCandidate
 
             # SP
-            overallSPBuildingTime += self.create_SP_instance(data)
+            total_SP_building_time += self.create_SP_instance(data)
             if(self.solver.options[self.timeLimit] <= 0):
                 fail = True
                 break
@@ -904,7 +902,7 @@ class LBBDPlanner(TwoPhasePlanner):
                 self.SP_instance, tee=True)
             print("SP instance solved.")
             solverTime += self.solver._last_solve_time
-            SPTimeLimitHit = SPTimeLimitHit or self.SP_model.results.solver.termination_condition in [
+            SP_time_limit_hit = SP_time_limit_hit or self.SP_model.results.solver.termination_condition in [
                 TerminationCondition.maxTimeLimit]
 
             self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
@@ -920,22 +918,22 @@ class LBBDPlanner(TwoPhasePlanner):
             else:
                 break
 
-        statusOk = False
+        status_ok = False
         if(not fail):
-            statusOk = self.SP_model.results.solver.status == SolverStatus.ok
+            status_ok = self.SP_model.results.solver.status == SolverStatus.ok
             objectiveValue = pyo.value(self.SP_instance.objective)
 
-        runInfo = {"solutionTime": solverTime,
-                   "MPBuildingTime": MPBuildingTime,
-                   "SPBuildingTime": overallSPBuildingTime,
-                   "statusOk": statusOk,
-                   "objectiveValue": objectiveValue,
-                   "MPTimeLimitHit": MPTimeLimitHit,
-                   "SPTimeLimitHit": SPTimeLimitHit,
-                   "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
-                   "iterations": iterations,
-                   "fail": fail}
+        run_info = {"solutionTime": solverTime,
+                    "MPBuildingTime": MPBuildingTime,
+                    "SP_building_time": total_SP_building_time,
+                    "status_ok": status_ok,
+                    "objectiveValue": objectiveValue,
+                    "MP_time_limit_hit": MP_time_limit_hit,
+                    "SP_time_limit_hit": SP_time_limit_hit,
+                    "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
+                    "iterations": iterations,
+                    "fail": fail}
 
         if(not fail):
             print(self.SP_model.results)
-        return runInfo
+        return run_info
