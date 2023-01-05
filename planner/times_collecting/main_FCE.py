@@ -2,13 +2,14 @@ import logging
 import sys
 import time
 from data_maker import DataDescriptor, DataMaker
+
 from planners import FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner
 from utils import SolutionVisualizer
 if __name__ == '__main__':
 
     variant = sys.argv[1] == "True"
 
-    solvers = ["cbc"]
+    solvers = ["cplex"]
     size = [100, 140, 180]
     covid = [0.2, 0.5, 0.8]
     anesthesia = [0.2, 0.5, 0.8]

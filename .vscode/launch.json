@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "main_SCE.py",
+            "name": "times_collecting_script.py",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -14,7 +14,7 @@
             "args": [
                 "False"
              ],
-             "cwd": "src"
+             "cwd": "planner"
         }
     ]
 }

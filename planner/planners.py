@@ -411,9 +411,9 @@ class TwoPhasePlanner(Planner):
     def __init__(self, timeLimit, gap, solver):
         super().__init__(timeLimit, gap, solver)
         self.MP_model = pyo.AbstractModel()
-        self.MPInstance = None
+        self.MP_instance = None
         self.SP_model = pyo.AbstractModel()
-        self.SPInstance = None
+        self.SP_instance = None
 
     def define_model(self):
         self.define_MP()
@@ -440,13 +440,13 @@ class TwoPhasePlanner(Planner):
 
     def define_x_parameters(self):
         self.SP_model.xParam = pyo.Param(self.SP_model.i,
-                                        self.SP_model.k,
-                                        self.SP_model.t)
+                                         self.SP_model.k,
+                                         self.SP_model.t)
 
     def define_status_parameters(self):
         self.SP_model.status = pyo.Param(self.SP_model.i,
-                                        self.SP_model.k,
-                                        self.SP_model.t)
+                                         self.SP_model.k,
+                                         self.SP_model.t)
 
     def define_SP(self):
         self.define_sets(self.SP_model)
@@ -477,26 +477,43 @@ class TwoPhasePlanner(Planner):
 
         self.define_objective(self.SP_model)
 
+    def create_MP_instance(self, data):
+        print("Creating MP instance...")
+        t = time.time()
+        self.MP_instance = self.MP_model.create_instance(data)
+        elapsed = (time.time() - t)
+        print("MP instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
+
+    def create_SP_instance(self, data):
+        self.extend_data(data)
+        print("Creating SP instance...")
+        t = time.time()
+        self.SP_instance = self.SP_model.create_instance(data)
+        elapsed = (time.time() - t)
+        print("SP instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
+
     def extract_solution(self):
         if(self.SP_model.results.solver.status != SolverStatus.ok):
             return None
         dict = {}
-        for k in self.SPInstance.k:
-            for t in self.SPInstance.t:
+        for k in self.SP_instance.k:
+            for t in self.SP_instance.t:
                 patients = []
-                for i in self.SPInstance.i:
-                    if(round(self.SPInstance.x[i, k, t].value) == 1):
-                        p = self.SPInstance.p[i]
-                        c = self.SPInstance.c[i]
-                        a = self.SPInstance.a[i]
+                for i in self.SP_instance.i:
+                    if(round(self.SP_instance.x[i, k, t].value) == 1):
+                        p = self.SP_instance.p[i]
+                        c = self.SP_instance.c[i]
+                        a = self.SP_instance.a[i]
                         anesthetist = 0
-                        for alpha in self.SPInstance.alpha:
-                            if(round(self.SPInstance.beta[alpha, i, t].value) == 1):
+                        for alpha in self.SP_instance.alpha:
+                            if(round(self.SP_instance.beta[alpha, i, t].value) == 1):
                                 anesthetist = alpha
-                        order = round(self.SPInstance.gamma[i].value, 2)
-                        specialty = self.SPInstance.specialty[i]
-                        priority = self.SPInstance.r[i]
-                        precedence = self.SPInstance.precedence[i]
+                        order = round(self.SP_instance.gamma[i].value, 2)
+                        specialty = self.SP_instance.specialty[i]
+                        priority = self.SP_instance.r[i]
+                        precedence = self.SP_instance.precedence[i]
                         patients.append(Patient(
                             i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
                 patients.sort(key=lambda x: x.order)
@@ -566,23 +583,6 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
             return pyo.Constraint.Skip
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
-    def create_MP_instance(self, data):
-        print("Creating MP instance...")
-        t = time.time()
-        self.MPInstance = self.MP_model.create_instance(data)
-        elapsed = (time.time() - t)
-        print("MP instance created in " + str(round(elapsed, 2)) + "s")
-        return elapsed
-
-    def create_SP_instance(self, data):
-        self.extend_data(data)
-        print("Creating SP instance...")
-        t = time.time()
-        self.SPInstance = self.SP_model.create_instance(data)
-        elapsed = (time.time() - t)
-        print("SP instance created in " + str(round(elapsed, 2)) + "s")
-        return elapsed
-
     def solve_model(self, data):
         self.define_model()
         MPBuildingTime = self.create_MP_instance(data)
@@ -590,7 +590,8 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         # MP
         print("Solving MP instance...")
         print(self.solver)
-        self.MP_model.results = self.solver.solve(self.MPInstance, tee=True, keepfiles=True)
+        self.MP_model.results = self.solver.solve(
+            self.MP_instance, tee=True, keepfiles=True)
         print("\nMP instance solved.")
         MPSolverTime = self.solver._last_solve_time
         MPTimeLimitHit = self.MP_model.results.solver.termination_condition in [
@@ -607,7 +608,8 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
 
         self.fix_SP_x_variables()
         print("Solving SP instance...")
-        self.SP_model.results = self.solver.solve(self.SPInstance, tee=True, keepfiles=True)
+        self.SP_model.results = self.solver.solve(
+            self.SP_instance, tee=True, keepfiles=True)
         print("SP instance solved.")
         SPSolverTime = self.solver._last_solve_time
         SPTimeLimitHit = self.SP_model.results.solver.termination_condition in [
@@ -622,8 +624,8 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
                    "statusOk": statusOk,
                    "MPTimeLimitHit": MPTimeLimitHit,
                    "SPTimeLimitHit": SPTimeLimitHit,
-                   "MPobjectiveValue": pyo.value(self.MPInstance.objective),
-                   "SPobjectiveValue": pyo.value(self.SPInstance.objective),
+                   "MPobjectiveValue": pyo.value(self.MP_instance.objective),
+                   "SPobjectiveValue": pyo.value(self.SP_instance.objective),
                    "MPUpperBound": MPUpperBound,
                    "objectiveFunctionLB": 0}
 
@@ -653,12 +655,12 @@ class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
 
     def extend_data(self, data):
         statusDict = {}
-        for i in range(1, self.MPInstance.I + 1):
-            for k in range(1, self.MPInstance.K + 1):
-                for t in range(1, self.MPInstance.T + 1):
-                    if(round(self.MPInstance.x[i, k, t].value) == 1 and self.MPInstance.a[i] == 1):
+        for i in range(1, self.MP_instance.I + 1):
+            for k in range(1, self.MP_instance.K + 1):
+                for t in range(1, self.MP_instance.T + 1):
+                    if(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 1):
                         statusDict[(i, k, t)] = Planner.FREE
-                    elif(round(self.MPInstance.x[i, k, t].value) == 1 and self.MPInstance.a[i] == 0):
+                    elif(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 0):
                         statusDict[(i, k, t)] = Planner.FIXED
                     else:
                         statusDict[(i, k, t)] = Planner.DISCARDED
@@ -667,14 +669,14 @@ class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
         fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i1 in self.MPInstance.i:
-                    if(round(self.MPInstance.x[i1, k, t].value) == 1 and self.SPInstance.a[i1] == 0):
-                        self.SPInstance.x[i1, k, t].fix(1)
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x[i1, k, t].value) == 1 and self.SP_instance.a[i1] == 0):
+                        self.SP_instance.x[i1, k, t].fix(1)
                         fixed += 1
-                    if(round(self.MPInstance.x[i1, k, t].value) == 0):
-                        self.SPInstance.x[i1, k, t].fix(0)
+                    if(round(self.MP_instance.x[i1, k, t].value) == 0):
+                        self.SP_instance.x[i1, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
 
@@ -712,15 +714,15 @@ class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
     def extend_data(self, data):
         xParamDict = {}
         statusDict = {}
-        for i in self.MPInstance.i:
-            for t in self.MPInstance.t:
+        for i in self.MP_instance.i:
+            for t in self.MP_instance.t:
                 # patient scheduled on day t
-                if(sum(round(self.MPInstance.x[i, k, t].value) for k in self.MPInstance.k) == 1):
-                    for k in range(1, self.MPInstance.K + 1):
+                if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
+                    for k in range(1, self.MP_instance.K + 1):
                         statusDict[(i, k, t)] = Planner.FREE
                         xParamDict[(i, k, t)] = 1
                 else:
-                    for k in range(1, self.MPInstance.K + 1):
+                    for k in range(1, self.MP_instance.K + 1):
                         statusDict[(i, k, t)] = Planner.DISCARDED
                         xParamDict[(i, k, t)] = 0
         data[None]['xParam'] = xParamDict
@@ -729,13 +731,14 @@ class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
     def fix_SP_x_variables(self):
         print("Fixing x variables for phase two...")
         fixed = 0
-        for k in self.MPInstance.k:
-            for t in self.MPInstance.t:
-                for i in self.MPInstance.i:
-                    if(self.SPInstance.status[i, k, t] == Planner.DISCARDED):
-                        self.SPInstance.x[i, k, t].fix(0)
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i in self.MP_instance.i:
+                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                        self.SP_instance.x[i, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
+
 
 class SlowCompleteLagrangeanHeuristicPlanner(SlowCompleteHeuristicPlanner):
 
@@ -754,3 +757,185 @@ class SlowCompleteLagrangeanHeuristicPlanner(SlowCompleteHeuristicPlanner):
 
         self.define_objective_MP(self.MP_model)
         self.define_objective(self.SP_model)
+
+
+class LBBDPlanner(TwoPhasePlanner):
+
+    def __init__(self, timeLimit, gap, iterations_cap, solver):
+        self.iterations_cap = iterations_cap
+        super().__init__(timeLimit, gap, solver)
+
+    # patients with same anesthetist on same day but different room cannot overlap
+    @staticmethod
+    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
+           or (model.xParam[i1, k1, t] + model.xParam[i2, k2, t] < 2)):
+            return pyo.Constraint.Skip
+        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+
+    # precedence across rooms
+    @staticmethod
+    def lambda_rule(model, i1, i2, t):
+        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            return pyo.Constraint.Skip
+        i1AllDay = 0
+        i2AllDay = 0
+        for k in model.k:
+            # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
+            if(model.xParam[i1, k, t] + model.xParam[i2, k, t] == 2):
+                return pyo.Constraint.Skip
+            i1AllDay += model.xParam[i1, k, t]
+            i2AllDay += model.xParam[i2, k, t]
+        if(i1AllDay == 0 or i2AllDay == 0):
+            return pyo.Constraint.Skip
+        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
+
+    # ensure gamma plus operation time does not exceed end of day
+    @staticmethod
+    def end_of_day_rule(model, i, k, t):
+        if(model.find_component('xParam') and model.xParam[i, k, t] == 0
+           or (model.specialty[i] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
+        return model.gamma[i] + model.p[i] <= model.s[k, t]
+
+    # ensure that patient i1 terminates operation before i2, if y_12kt = 1
+    @staticmethod
+    def time_ordering_precedence_rule(model, i1, i2, k, t):
+        if(i1 == i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
+        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+
+    @staticmethod
+    def start_time_ordering_priority_rule(model, i1, i2, k, t):
+        if(i1 == i2 or model.u[i1, i2] == 0 or (model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
+        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
+
+    # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
+    @staticmethod
+    def exclusive_precedence_rule(model, i1, i2, k, t):
+        if(i1 >= i2 or (model.find_component('xParam') and model.xParam[i1, k, t] + model.xParam[i2, k, t] < 2)
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            return pyo.Constraint.Skip
+        return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
+
+    def fix_SP_x_variables(self):
+        print("Fixing x variables for SP...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x[i1, k, t].value) == 1):
+                        self.SP_instance.x[i1, k, t].fix(1)
+                    else:
+                        self.SP_instance.x[i1, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
+    def extend_data(self, data):
+        dict = {}
+        for i in range(1, self.MP_instance.I + 1):
+            for k in range(1, self.MP_instance.K + 1):
+                for t in range(1, self.MP_instance.T + 1):
+                    if(round(self.MP_instance.x[i, k, t].value) == 1):
+                        dict[(i, k, t)] = 1
+                    else:
+                        dict[(i, k, t)] = 0
+        data[None]['xParam'] = dict
+
+    def solve_model(self, data):
+        self.define_MP()
+        self.define_SP()
+        MPBuildingTime = self.create_MP_instance(data)
+        self.MP_instance.cuts = pyo.ConstraintList()
+
+        solverTime = 0
+        iterations = 0
+        overallSPBuildingTime = 0
+        MPTimeLimitHit = False
+        SPTimeLimitHit = False
+        worstMPBoundTimeLimitHit = 0
+        fail = False
+        objectiveValue = -1
+        while iterations < self.iterations_cap:
+            iterations += 1
+            # MP
+            print("Solving MP instance...")
+            self.MP_model.results = self.solver.solve(
+                self.MP_instance, tee=True)
+            print("\nMP instance solved.")
+            solverTime += self.solver._last_solve_time
+            MPTimeLimitHit = MPTimeLimitHit or self.MP_model.results.solver.termination_condition in [
+                TerminationCondition.maxTimeLimit]
+
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
+                self.solver._last_solve_time
+            if(self.solver.options[self.timeLimit] <= 0):
+                fail = True
+                break
+
+            # if we hit the time limit, we keep track of the worst possible bound (i.e. the highest) in order to give an estimate about
+            # how bad our solution can be, given that time limit was hit at least once
+            if(MPTimeLimitHit):
+                MPresultsAsString = str(self.MP_model.results)
+                worstMPBoundCandidate = float(
+                    re.search("Upper bound: -*(\d*.\d*)", MPresultsAsString).group(1))
+                if(worstMPBoundCandidate > worstMPBoundTimeLimitHit):
+                    worstMPBoundTimeLimitHit = worstMPBoundCandidate
+
+            # SP
+            overallSPBuildingTime += self.create_SP_instance(data)
+            if(self.solver.options[self.timeLimit] <= 0):
+                fail = True
+                break
+
+            self.fix_SP_x_variables()
+            print("Solving SP instance...")
+            self.SP_model.results = self.solver.solve(
+                self.SP_instance, tee=True)
+            print("SP instance solved.")
+            solverTime += self.solver._last_solve_time
+            SPTimeLimitHit = SPTimeLimitHit or self.SP_model.results.solver.termination_condition in [
+                TerminationCondition.maxTimeLimit]
+
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
+                self.solver._last_solve_time
+
+            # no solution found, but solver status is fine: need to add a cut
+            if(self.SP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+                self.MP_instance.cuts.add(sum(
+                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
+                print("Generated cuts so far: \n")
+                self.MP_instance.cuts.display()
+                print("\n")
+            else:
+                break
+
+        statusOk = False
+        if(not fail):
+            statusOk = self.SP_model.results.solver.status == SolverStatus.ok
+            objectiveValue = pyo.value(self.SP_instance.objective)
+
+        runInfo = {"solutionTime": solverTime,
+                   "MPBuildingTime": MPBuildingTime,
+                   "SPBuildingTime": overallSPBuildingTime,
+                   "statusOk": statusOk,
+                   "objectiveValue": objectiveValue,
+                   "MPTimeLimitHit": MPTimeLimitHit,
+                   "SPTimeLimitHit": SPTimeLimitHit,
+                   "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
+                   "iterations": iterations,
+                   "fail": fail}
+
+        if(not fail):
+            print(self.SP_model.results)
+        return runInfo

@@ -1,6 +1,6 @@
 import unittest
 
-import LBBD_planner as LBBD
+from planners import LBBDPlanner
 import LBBD_planner_3_phase as LBBDV
 from test.common import build_data_dictionary
 from test.common import TestCommon
@@ -13,7 +13,7 @@ class TestLBBDStandard(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = LBBD.Planner(timeLimit=900, gap=0.01, iterationsCap=30, solver="cplex")
+        planner = LBBDPlanner(timeLimit=900, gap=0.01, iterations_cap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
