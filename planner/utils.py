@@ -5,7 +5,7 @@ import datetime
 
 from pyparsing import PrecededBy
 
-from model import Patient
+from planner.model import Patient
 
 class SolutionVisualizer:
 

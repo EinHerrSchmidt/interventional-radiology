@@ -8,13 +8,14 @@
             "name": "times_collecting_script.py",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            // "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": [
-                "False"
-             ],
-             "cwd": "planner"
+            "justMyCode": false,
+            "module": "planner.times_collecting.times_collecting_script",
+            // "args": [
+            //     "True"
+            // ],
+            // "cwd": "times_collecting"
         }
     ]
 }

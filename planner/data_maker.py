@@ -5,9 +5,9 @@ from scipy.stats import truncnorm
 from scipy.stats import binom
 from scipy.stats import uniform
 import numpy as np
-import sample_data as sd
+import planner.sample_data as sd
 
-from model import Patient
+from planner.model import Patient
 
 
 class DataDescriptor:

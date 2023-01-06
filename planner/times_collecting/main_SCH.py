@@ -1,14 +1,11 @@
 import logging
 import sys
 import time
-from data_maker import DataDescriptor, DataMaker
-from planner import LBBDPlanner
+from planner import SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner
 from planner.utils import SolutionVisualizer
 from planner.data_maker import DataDescriptor, DataMaker
-import LBBD_planner_3_phase as lbbdv
 
 variant = sys.argv[1] == "True"
-maxIterations = int(sys.argv[2])
 
 solvers = ["cplex"]
 size = [100, 140, 180]
@@ -16,23 +13,23 @@ covid = [0.2, 0.5, 0.8]
 anesthesia = [0.2, 0.5, 0.8]
 anesthetists = [1, 2]
 
-if(variant):
-    logging.basicConfig(filename='./times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
-else:
-    logging.basicConfig(filename='./times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
-logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tWorst_MP_Bound_Time_Limit\tIterations\tFailed\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+logging.basicConfig(filename='./planner/times_collecting/times/sch_times.log',
+                    encoding='utf-8',
+                    level=logging.INFO,
+                    filemode="w")
+logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
 for solver in solvers:
     for s in size:
         for c in covid:
             for a in anesthesia:
                 for at in anesthetists:
-
+                    
                     planner = None
                     if(variant):
-                        planner = lbbdv.Planner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
+                        planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
                     else:
-                        planner = LBBDPlanner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
+                        planner = SlowCompleteHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
 
                     dataDescriptor = DataDescriptor()
 
@@ -52,10 +49,9 @@ for solver in solvers:
                     runInfo = planner.solve_model(dataDictionary)
                     elapsed = (time.time() - t)
 
-                    if(runInfo["fail"] == False):
-                        solution = planner.extract_solution()
-                        sv = SolutionVisualizer()
-                        usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
+                    solution = planner.extract_solution()
+                    sv = SolutionVisualizer()
+                    usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
 
                     logging.info(solver + "\t"
                                     + str(s) + "\t"
@@ -63,16 +59,16 @@ for solver in solvers:
                                     + str(a) + "\t"
                                     + str(at) + "\t"
                                     + str(runInfo["MPBuildingTime"]) + "\t"
-                                    + str(runInfo["SPBuildingTime"]) + "\t"
+                                    + str(runInfo["SP_building_time"]) + "\t"
                                     + str(round(elapsed, 2)) + "\t"
-                                    + str(runInfo["solutionTime"]) + "\t"
-                                    + str(runInfo["statusOk"]) + "\t"
-                                    + str(runInfo["objectiveValue"]) + "\t"
-                                    + str(runInfo["MPTimeLimitHit"]) + "\t"
-                                    + str(runInfo["SPTimeLimitHit"]) + "\t"
-                                    + str(runInfo["worstMPBoundTimeLimitHit"]) + "\t"
-                                    + str(runInfo["iterations"]) + "\t"
-                                    + str(runInfo["fail"]) + "\t"
+                                    + str(runInfo["MP_solver_time"]) + "\t"
+                                    + str(runInfo["SP_solver_time"]) + "\t"
+                                    + str(runInfo["status_ok"]) + "\t"
+                                    + str(runInfo["MPobjectiveValue"]) + "\t"
+                                    + str(runInfo["SPobjectiveValue"]) + "\t"
+                                    + str(runInfo["MP_upper_bound"]) + "\t"
+                                    + str(runInfo["MP_time_limit_hit"]) + "\t"
+                                    + str(runInfo["SP_time_limit_hit"]) + "\t"
                                     + str(usageInfo["Specialty1ORUsage"]) + "\t"
                                     + str(usageInfo["Specialty2ORUsage"]) + "\t"
                                     + str(usageInfo["Specialty1SelectedRatio"]) + "\t"

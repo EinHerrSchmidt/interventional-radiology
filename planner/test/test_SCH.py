@@ -2,15 +2,17 @@ import unittest
 
 from test.common import build_data_dictionary
 from test.common import TestCommon
-from planners import FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner
+from planners import SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner
 
 
-class TestFCEStandard(TestCommon):
+class TestSCHStandard(TestCommon):
 
     @classmethod
     def setUpClass(self):
+
         self.dataDictionary = build_data_dictionary()
-        planner = FastCompleteHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
+
+        planner = SlowCompleteHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
@@ -42,12 +44,14 @@ class TestFCEStandard(TestCommon):
         self.anesthetist_assignment()
 
 
-class TestFCEVariant(TestCommon):
+class TestSCHVariant(TestCommon):
 
     @classmethod
     def setUpClass(self):
+
         self.dataDictionary = build_data_dictionary()
-        planner = FastCompleteLagrangeanHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
+
+        planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=900, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

@@ -8,8 +8,9 @@ import pandas as pd
 import datetime
 from pyomo.opt import SolverStatus, TerminationCondition
 
-from model import Patient
 from abc import ABC, abstractmethod
+
+from planner.model import Patient
 
 
 class Planner(ABC):
@@ -436,7 +437,7 @@ class TwoPhasePlanner(Planner):
         self.define_anesthetist_assignment_constraint(self.MP_model)
         self.define_anesthetist_time_constraint(self.MP_model)
 
-        self.define_objective(self.MP_model)
+        # self.define_objective(self.MP_model)
 
     def define_x_parameters(self):
         self.SP_model.x_param = pyo.Param(self.SP_model.i,
@@ -475,7 +476,7 @@ class TwoPhasePlanner(Planner):
         self.define_precedence_constraint(self.SP_model)
         self.define_exclusive_precedence_constraint(self.SP_model)
 
-        self.define_objective(self.SP_model)
+        # self.define_objective(self.SP_model)
 
     def create_MP_instance(self, data):
         print("Creating MP instance...")

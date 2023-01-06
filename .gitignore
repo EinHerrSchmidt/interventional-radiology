@@ -130,3 +130,5 @@ dmypy.json
 
 # project's folders to ignore
 log/
+.idea
+planner/times_collecting/times
