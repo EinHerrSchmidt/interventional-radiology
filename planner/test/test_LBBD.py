@@ -1,7 +1,6 @@
 import unittest
 
 from planners import LBBDPlanner, ThreePhaseLBBDPlanner
-import LBBD_planner_3_phase as LBBDV
 from test.common import build_data_dictionary
 from test.common import TestCommon
 

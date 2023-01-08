@@ -1,1 +1,1 @@
-from planner.planners import SimplePlanner, FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner, SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner, LBBDPlanner
+from planner.planners import SimplePlanner, FastCompleteHeuristicPlanner, FastCompleteLagrangeanHeuristicPlanner, SlowCompleteHeuristicPlanner, SlowCompleteLagrangeanHeuristicPlanner, LBBDPlanner, ThreePhaseLBBDPlanner
