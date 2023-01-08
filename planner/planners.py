@@ -398,7 +398,7 @@ class SimplePlanner(Planner):
 
         run_info = {"BuildingTime": buildingTime,
                     "status_ok": status_ok,
-                    "SolverTime": self.solver._last_solve_time,
+                    "solver_time": self.solver._last_solve_time,
                     "TimeLimitHit": timeLimitHit,
                     "UpperBound": upperBound,
                     "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
@@ -590,7 +590,6 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
 
         # MP
         print("Solving MP instance...")
-        print(self.solver)
         self.MP_model.results = self.solver.solve(self.MP_instance, tee=True)
         print("\nMP instance solved.")
         MP_solver_time = self.solver._last_solve_time
@@ -857,7 +856,7 @@ class LBBDPlanner(TwoPhasePlanner):
         MPBuildingTime = self.create_MP_instance(data)
         self.MP_instance.cuts = pyo.ConstraintList()
 
-        solverTime = 0
+        solver_time = 0
         iterations = 0
         total_SP_building_time = 0
         MP_time_limit_hit = False
@@ -872,7 +871,7 @@ class LBBDPlanner(TwoPhasePlanner):
             self.MP_model.results = self.solver.solve(
                 self.MP_instance, tee=True)
             print("\nMP instance solved.")
-            solverTime += self.solver._last_solve_time
+            solver_time += self.solver._last_solve_time
             MP_time_limit_hit = MP_time_limit_hit or self.MP_model.results.solver.termination_condition in [
                 TerminationCondition.maxTimeLimit]
 
@@ -902,7 +901,7 @@ class LBBDPlanner(TwoPhasePlanner):
             self.SP_model.results = self.solver.solve(
                 self.SP_instance, tee=True)
             print("SP instance solved.")
-            solverTime += self.solver._last_solve_time
+            solver_time += self.solver._last_solve_time
             SP_time_limit_hit = SP_time_limit_hit or self.SP_model.results.solver.termination_condition in [
                 TerminationCondition.maxTimeLimit]
 
@@ -924,7 +923,7 @@ class LBBDPlanner(TwoPhasePlanner):
             status_ok = self.SP_model.results.solver.status == SolverStatus.ok
             objectiveValue = pyo.value(self.SP_instance.objective)
 
-        run_info = {"solutionTime": solverTime,
+        run_info = {"solutionTime": solver_time,
                     "MPBuildingTime": MPBuildingTime,
                     "SP_building_time": total_SP_building_time,
                     "status_ok": status_ok,
@@ -938,3 +937,183 @@ class LBBDPlanner(TwoPhasePlanner):
         if(not fail):
             print(self.SP_model.results)
         return run_info
+
+
+class ThreePhaseLBBDPlanner(LBBDPlanner):
+
+    def __init__(self, timeLimit, gap, iterations_cap, solver):
+        super().__init__(timeLimit, gap, iterations_cap, solver)
+        self.SMP_model = pyo.AbstractModel()
+        self.SMP_instance = None
+
+    @staticmethod
+    def maximum_anesthesia_time_constraint_rule(model, t):
+        if(sum(model.a[i] for i in model.i) == 0):
+            return pyo.Constraint.Skip
+        return (sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A * 270)
+
+    def define_maximum_anesthesia_time_constraint(self):
+        self.MP_model.maximum_anesthesia_time_constraint = pyo.Constraint(
+            self.MP_model.t,
+            rule=self.maximum_anesthesia_time_constraint_rule)
+
+    def define_model(self):
+        self.define_MP()
+        self.define_SMP()
+        self.define_SP()
+
+        self.define_objective(self.MP_model)
+        self.define_objective(self.SMP_model)
+        self.define_objective(self.SP_model)
+
+    def define_MP(self):
+        self.define_sets(self.MP_model)
+        self.define_x_variables(self.MP_model)
+        self.define_parameters(self.MP_model)
+        self.define_single_surgery_constraints(self.MP_model)
+        self.define_surgery_time_constraints(self.MP_model)
+        self.define_specialty_assignment_constraints(self.MP_model)
+        self.define_anesthetists_number_param(self.MP_model)
+        self.define_anesthetists_range_set(self.MP_model)
+
+        self.define_maximum_anesthesia_time_constraint()
+
+    def define_SMP(self):
+        self.define_sets(self.SMP_model)
+        self.define_x_variables(self.SMP_model)
+        self.define_parameters(self.SMP_model)
+        self.define_single_surgery_constraints(self.SMP_model)
+        self.define_surgery_time_constraints(self.SMP_model)
+        self.define_specialty_assignment_constraints(self.SMP_model)
+        self.define_anesthetists_number_param(self.SMP_model)
+        self.define_anesthetists_range_set(self.SMP_model)
+
+        self.define_beta_variables(self.SMP_model)
+        self.define_anesthetists_availability(self.SMP_model)
+        self.define_anesthetist_assignment_constraint(self.SMP_model)
+        self.define_anesthetist_time_constraint(self.SMP_model)
+
+    def create_SMP_instance(self, data):
+        print("Creating SMP instance...")
+        t = time.time()
+        self.SMP_instance = self.SMP_model.create_instance(data)
+        elapsed = (time.time() - t)
+        print("SMP instance created in " + str(round(elapsed, 2)) + "s")
+        # logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
+        # logging.info("MP instance created in " + str(round(elapsed, 2)) + "s")
+        return elapsed
+
+    def fix_SMP_x_variables(self):
+        print("Fixing x variables for SMP...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x[i1, k, t].value) == 1):
+                        self.SMP_instance.x[i1, k, t].fix(1)
+                    else:
+                        self.SMP_instance.x[i1, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
+    def define_model(self):
+        self.define_MP()
+        self.define_SMP()
+        self.define_SP()
+
+        self.define_objective(self.MP_model)
+        self.define_objective(self.SMP_model)
+        self.define_objective(self.SP_model)
+
+    def solve_model(self, data):
+        self.define_model()
+        MPBuildingTime = self.create_MP_instance(data)
+        self.MP_instance.cuts = pyo.ConstraintList()
+
+        solver_time = 0
+        iterations = 0
+        overallSPBuildingTime = 0
+        MPTimeLimitHit = False
+        worstMPBoundTimeLimitHit = 0
+        fail = False
+        objectiveValue = -1
+        while iterations < self.iterations_cap:
+            iterations += 1
+            # MP
+            print("Solving MP instance...")
+            self.MP_model.results = self.solver.solve(
+                self.MP_instance, tee=True)
+            print("\nMP instance solved.")
+            solver_time += self.solver._last_solve_time
+            MPTimeLimitHit = MPTimeLimitHit or self.MP_model.results.solver.termination_condition in [
+                TerminationCondition.maxTimeLimit]
+            print(float(re.search("Upper bound: -*(\d*.\d*)",
+                  str(self.MP_model.results)).group(1)))
+
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
+                self.solver._last_solve_time
+            if(self.solver.options[self.timeLimit] <= 0):
+                fail = True
+                break
+
+            IPBuildingTime = self.create_SMP_instance(data)
+            self.fix_SMP_x_variables()
+
+            print("Solving SMP instance...")
+            self.SMP_model.results = self.solver.solve(
+                self.SMP_instance, tee=False)
+            print("\nIP instance solved.")
+            solver_time += self.solver._last_solve_time
+
+            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
+                self.solver._last_solve_time
+            if(self.solver.options[self.timeLimit] <= 0):
+                fail = True
+                break
+
+            if(self.SMP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+                self.MP_instance.cuts.add(sum(
+                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
+                continue
+
+            # SP
+            overallSPBuildingTime += self.create_SP_instance(data)
+
+            self.fix_SP_x_variables()
+            print("Solving SP instance...")
+            self.SP_model.results = self.solver.solve(
+                self.SP_instance, tee=True)
+            print("SP instance solved.")
+            solver_time += self.solver._last_solve_time
+
+            # no solution found, but solver status is fine: need to add a cut
+            if(self.SP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+                self.MP_instance.cuts.add(sum(
+                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
+                print("Generated cuts so far: \n")
+                self.MP_instance.cuts.display()
+                print("\n")
+            else:
+                break
+
+        statusOk = False
+        if(not fail):
+            statusOk = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
+            if(statusOk):
+                objectiveValue = pyo.value(self.SP_instance.objective)
+
+        runInfo = {"solutionTime": solver_time,
+                   "MPBuildingTime": MPBuildingTime,
+                   "SPBuildingTime": overallSPBuildingTime,
+                   "statusOk": statusOk,
+                   "objectiveValue": objectiveValue,
+                   "MPTimeLimitHit": MPTimeLimitHit,
+                   "SPTimeLimitHit": -1,
+                   "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
+                   "iterations": iterations,
+                   "fail": fail
+                   }
+
+        if(not fail):
+            print(self.SP_model.results)
+        return runInfo

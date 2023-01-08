@@ -2,10 +2,9 @@ import logging
 import sys
 import time
 from data_maker import DataDescriptor, DataMaker
-from planner import LBBDPlanner
+from planner import LBBDPlanner, ThreePhaseLBBDPlanner
 from planner.utils import SolutionVisualizer
 from planner.data_maker import DataDescriptor, DataMaker
-import LBBD_planner_3_phase as lbbdv
 
 variant = sys.argv[1] == "True"
 maxIterations = int(sys.argv[2])
@@ -30,7 +29,7 @@ for solver in solvers:
 
                     planner = None
                     if(variant):
-                        planner = lbbdv.Planner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
+                        planner = ThreePhaseLBBDPlanner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
                     else:
                         planner = LBBDPlanner(timeLimit=600, gap = 0.0, iterationsCap=maxIterations, solver=solver)
 
