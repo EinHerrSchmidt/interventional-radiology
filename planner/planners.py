@@ -43,6 +43,10 @@ class Planner(ABC):
         self.solver.options[self.gap] = gap
 
         self.solver_time = 0
+        self.cumulated_building_time = 0
+        self.status_ok = False
+        self.gap = 0
+        self.objective_function_value = 0
 
     @abstractmethod
     def define_model(self):
@@ -384,7 +388,7 @@ class SimplePlanner(Planner):
 
     def solve_model(self, data):
         self.define_model()
-        buildingTime = self.create_model_instance(data)
+        self.cumulated_building_time = self.create_model_instance(data)
         self.fix_y_variables(self.modelInstance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.modelInstance, tee=True)
@@ -398,16 +402,6 @@ class SimplePlanner(Planner):
             TerminationCondition.maxTimeLimit]
         status_ok = self.model.results.solver.status == SolverStatus.ok
 
-        run_info = {"BuildingTime": buildingTime,
-                    "status_ok": status_ok,
-                    "solver_time": self.solver._last_solve_time,
-                    "TimeLimitHit": timeLimitHit,
-                    "UpperBound": upperBound,
-                    "Gap": round((1 - pyo.value(self.modelInstance.objective) / upperBound) * 100, 2)
-                    }
-
-        return run_info
-
 
 class TwoPhasePlanner(Planner):
 
@@ -417,6 +411,12 @@ class TwoPhasePlanner(Planner):
         self.MP_instance = None
         self.SP_model = pyo.AbstractModel()
         self.SP_instance = None
+
+        self.MP_time_limit_hit = False
+        self.SP_time_limit_hit = False
+        self.MP_objective_function_value = 0
+        self.SP_objective_function_value = 0
+        self.MP_upper_bound = 0
 
     def define_model(self):
         self.define_MP()
@@ -604,36 +604,23 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
 
     def solve_model(self, data):
         self.define_model()
-        MPBuildingTime = self.create_MP_instance(data)
+        self.cumulated_building_time = self.create_MP_instance(data)
 
         # MP
         self.solve_MP()
         resultsAsString = str(self.MP_model.results)
-        MP_upper_bound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
+        self.MP_upper_bound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
-        self.solver.options[self.timeLimit] = max(10, 600 - self.solver._last_solve_time)
+        self.solver.options[self.timeLimit] = max(
+            10, 600 - self.solver._last_solve_time)
 
         # SP
-        SP_building_time = self.create_SP_instance(data)
+        self.cumulated_building_time += self.create_SP_instance(data)
 
         self.fix_SP_x_variables()
         self.solve_SP()
 
-        status_ok = self.SP_model.results.solver.status == SolverStatus.ok
-
-        run_info = {"solver_time": self.solver_time,
-                    "MPBuildingTime": MPBuildingTime,
-                    "SP_building_time": SP_building_time,
-                    "status_ok": status_ok,
-                    "MP_time_limit_hit": self.MP_time_limit_hit,
-                    "SP_time_limit_hit": self.SP_time_limit_hit,
-                    "MPobjectiveValue": pyo.value(self.MP_instance.objective),
-                    "SPobjectiveValue": pyo.value(self.SP_instance.objective),
-                    "MP_upper_bound": MP_upper_bound,
-                    "objectiveFunctionLB": 0}
-
-        print(self.SP_model.results)
-        return run_info
+        self.status_ok = self.SP_model.results.solver.status == SolverStatus.ok
 
 
 class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
@@ -765,8 +752,9 @@ class SlowCompleteLagrangeanHeuristicPlanner(SlowCompleteHeuristicPlanner):
 class LBBDPlanner(TwoPhasePlanner):
 
     def __init__(self, timeLimit, gap, iterations_cap, solver):
-        self.iterations_cap = iterations_cap
         super().__init__(timeLimit, gap, solver)
+        self.iterations_cap = iterations_cap
+        self.fail = False
 
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
@@ -855,9 +843,26 @@ class LBBDPlanner(TwoPhasePlanner):
                         dict[(i, k, t)] = 0
         data[None]['x_param'] = dict
 
+    def is_infeasible(self, model):
+        return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
+
+    def check_timeout_failure(self):
+        self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
+            self.solver._last_solve_time
+        if(self.solver.options[self.timeLimit] <= 0):
+            return True
+        return False
+
+    def extract_objective_value(self, fail, status_ok):
+        objective_value = None
+        if not fail and status_ok:
+            if status_ok:
+                objective_value = pyo.value(self.SP_instance.objective)
+        return objective_value
+
     def solve_model(self, data):
         self.define_model()
-        MPBuildingTime = self.create_MP_instance(data)
+        MP_building_time = self.create_MP_instance(data)
         self.MP_instance.cuts = pyo.ConstraintList()
 
         self.solver_time = 0
@@ -865,34 +870,19 @@ class LBBDPlanner(TwoPhasePlanner):
         total_SP_building_time = 0
         MP_time_limit_hit = False
         SP_time_limit_hit = False
-        worstMPBoundTimeLimitHit = 0
         fail = False
-        objectiveValue = -1
+        objective_value = -1
         while iterations < self.iterations_cap:
             iterations += 1
             # MP
             self.solve_MP()
 
-            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-                self.solver._last_solve_time
-            if(self.solver.options[self.timeLimit] <= 0):
-                fail = True
+            fail = self.check_timeout_failure()
+            if fail:
                 break
-
-            # if we hit the time limit, we keep track of the worst possible bound (i.e. the highest) in order to give an estimate about
-            # how bad our solution can be, given that time limit was hit at least once
-            if(MP_time_limit_hit):
-                MPresultsAsString = str(self.MP_model.results)
-                worstMPBoundCandidate = float(
-                    re.search("Upper bound: -*(\d*.\d*)", MPresultsAsString).group(1))
-                if(worstMPBoundCandidate > worstMPBoundTimeLimitHit):
-                    worstMPBoundTimeLimitHit = worstMPBoundCandidate
 
             # SP
             total_SP_building_time += self.create_SP_instance(data)
-            if(self.solver.options[self.timeLimit] <= 0):
-                fail = True
-                break
 
             self.fix_SP_x_variables()
             self.solve_SP()
@@ -901,34 +891,14 @@ class LBBDPlanner(TwoPhasePlanner):
                 self.solver._last_solve_time
 
             # no solution found, but solver status is fine: need to add a cut
-            if(self.SP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+            if self.is_infeasible(self.SP_model):
                 self.MP_instance.cuts.add(sum(
                     1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
-                print("Generated cuts so far: \n")
-                self.MP_instance.cuts.display()
-                print("\n")
             else:
                 break
 
-        status_ok = False
-        if(not fail):
-            status_ok = self.SP_model.results.solver.status == SolverStatus.ok
-            objectiveValue = pyo.value(self.SP_instance.objective)
-
-        run_info = {"solutionTime": self.solver_time,
-                    "MPBuildingTime": MPBuildingTime,
-                    "SP_building_time": total_SP_building_time,
-                    "status_ok": status_ok,
-                    "objectiveValue": objectiveValue,
-                    "MP_time_limit_hit": MP_time_limit_hit,
-                    "SP_time_limit_hit": SP_time_limit_hit,
-                    "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
-                    "iterations": iterations,
-                    "fail": fail}
-
-        if(not fail):
-            print(self.SP_model.results)
-        return run_info
+        status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
+        objective_value = self.extract_objective_value(fail, status_ok)
 
 
 class ThreePhaseLBBDPlanner(LBBDPlanner):
@@ -1017,48 +987,42 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
         self.define_objective(self.SMP_model)
         self.define_objective(self.SP_model)
 
+    def solve_SMP(self):
+        print("Solving SMP instance...")
+        self.SMP_model.results = self.solver.solve(
+            self.SMP_instance, tee=False)
+        print("\nSMP instance solved.")
+        self.solver_time += self.solver._last_solve_time
+
     def solve_model(self, data):
         self.define_model()
-        MPBuildingTime = self.create_MP_instance(data)
+        MP_building_time = self.create_MP_instance(data)
         self.MP_instance.cuts = pyo.ConstraintList()
 
         self.solver_time = 0
         iterations = 0
         overallSPBuildingTime = 0
-        MPTimeLimitHit = False
-        worstMPBoundTimeLimitHit = 0
+        MP_time_limit_hit = False
         fail = False
-        objectiveValue = -1
+        objective_value = -1
         while iterations < self.iterations_cap:
             iterations += 1
 
             self.solve_MP()
 
-            print(float(re.search("Upper bound: -*(\d*.\d*)",
-                  str(self.MP_model.results)).group(1)))
-
-            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-                self.solver._last_solve_time
-            if(self.solver.options[self.timeLimit] <= 0):
-                fail = True
+            fail = self.check_timeout_failure()
+            if fail:
                 break
 
-            IPBuildingTime = self.create_SMP_instance(data)
+            SMP_building_time = self.create_SMP_instance(data)
             self.fix_SMP_x_variables()
+            self.solve_SMP()
 
-            print("Solving SMP instance...")
-            self.SMP_model.results = self.solver.solve(
-                self.SMP_instance, tee=False)
-            print("\nIP instance solved.")
-            self.solver_time += self.solver._last_solve_time
-
-            self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-                self.solver._last_solve_time
-            if(self.solver.options[self.timeLimit] <= 0):
-                fail = True
+            fail = self.check_timeout_failure()
+            if fail:
                 break
 
-            if(self.SMP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+            if self.is_infeasible(self.SMP_model):
                 self.MP_instance.cuts.add(sum(
                     1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
                 continue
@@ -1070,30 +1034,12 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
             self.solve_SP()
 
             # no solution found, but solver status is fine: need to add a cut
-            if(self.SP_model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]):
+            if self.is_infeasible(self.SP_model):
                 self.MP_instance.cuts.add(sum(
                     1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
             else:
                 break
 
-        statusOk = False
-        if(not fail):
-            statusOk = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
-            if(statusOk):
-                objectiveValue = pyo.value(self.SP_instance.objective)
+        status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
+        objective_value = self.extract_objective_value(fail, status_ok)
 
-        run_info = {"solutionTime": self.solver_time,
-                   "MPBuildingTime": MPBuildingTime,
-                   "SPBuildingTime": overallSPBuildingTime,
-                   "statusOk": statusOk,
-                   "objectiveValue": objectiveValue,
-                   "MPTimeLimitHit": MPTimeLimitHit,
-                   "SPTimeLimitHit": -1,
-                   "worstMPBoundTimeLimitHit": worstMPBoundTimeLimitHit,
-                   "iterations": iterations,
-                   "fail": fail
-                   }
-
-        if(not fail):
-            print(self.SP_model.results)
-        return run_info
