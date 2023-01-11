@@ -70,6 +70,18 @@ class Planner(ABC):
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
     @staticmethod
+    def single_surgery_delay_rule(model, i):
+        return sum(model.x_d[i, k, t] for k in model.k for t in model.t) <= 1
+
+    @staticmethod
+    def robustness_constraints_rule(model, k, t):
+        return sum(model.x_d[i, k, t] for i in model.i) <= 3
+
+    @staticmethod
+    def delay_implication_constraint_rule(model, i, k, t):
+        return model.x[i, k, t] >= model.x_d[i, k, t]
+
+    @staticmethod
     def surgery_time_rule(model, k, t):
         return sum(model.p[i] * model.x[i, k, t] for i in model.i) <= model.s[k, t]
 
@@ -124,13 +136,33 @@ class Planner(ABC):
 
     @staticmethod
     def objective_function(model):
-        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t)
+        N = 1 / (sum(model.r[i] for i in model.i))
+        R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
+        return sum(model.d[i] * model.x_d[i, k, t] for i in model.i for k in model.k for t in model.t) + N * R
 
     # constraints
     def define_single_surgery_constraints(self, model):
         model.single_surgery_constraint = pyo.Constraint(
             model.i,
             rule=self.single_surgery_rule)
+
+    def define_single_surgery_delay_constraints(self, model):
+        model.single_surgery_delay_constraint = pyo.Constraint(
+            model.i,
+            rule=self.single_surgery_delay_rule)
+
+    def define_robustness_constraints(self, model):
+        model.robustness_constraint = pyo.Constraint(
+            model.k,
+            model.t,
+            rule=self.robustness_constraints_rule)
+
+    def define_delay_implication_constraint(self, model):
+        model.delay_implication_constraint = pyo.Constraint(
+            model.i,
+            model.k,
+            model.t,
+            rule=self.delay_implication_constraint_rule)
 
     def define_surgery_time_constraints(self, model):
         model.surgery_time_constraint = pyo.Constraint(
@@ -260,8 +292,15 @@ class Planner(ABC):
                           model.t,
                           domain=pyo.Binary)
 
+    def define_x_delay_variables(self, model):
+        model.x_d = pyo.Var(model.i,
+                        model.k,
+                       model.t,
+                       domain=pyo.Binary)
+
     def define_parameters(self, model):
         model.p = pyo.Param(model.i)
+        model.d = pyo.Param(model.i)
         model.r = pyo.Param(model.i)
         model.s = pyo.Param(model.k, model.t)
         model.a = pyo.Param(model.i)
@@ -270,7 +309,6 @@ class Planner(ABC):
         model.tau = pyo.Param(model.j, model.k, model.t)
         model.specialty = pyo.Param(model.i)
         model.bigM = pyo.Param(model.bigMRangeSet)
-        model.d = pyo.Param(model.i)
         model.precedence = pyo.Param(model.i)
 
 
@@ -298,7 +336,7 @@ class SimplePlanner(Planner):
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
 
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
@@ -307,7 +345,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -330,6 +368,10 @@ class SimplePlanner(Planner):
     def define_model(self):
         self.define_sets(self.model)
         self.define_x_variables(self.model)
+        self.define_x_delay_variables(self.model)
+        self.define_single_surgery_delay_constraints(self.model)
+        self.define_robustness_constraints(self.model)
+        self.define_delay_implication_constraint(self.model)
         self.define_parameters(self.model)
 
         self.define_single_surgery_constraints(self.model)
@@ -447,6 +489,10 @@ class TwoPhasePlanner(Planner):
     def define_MP(self):
         self.define_sets(self.MP_model)
         self.define_x_variables(self.MP_model)
+        self.define_x_delay_variables(self.MP_model)
+        self.define_single_surgery_delay_constraints(self.MP_model)
+        self.define_robustness_constraints(self.MP_model)
+        self.define_delay_implication_constraint(self.MP_model)
         self.define_parameters(self.MP_model)
         self.define_single_surgery_constraints(self.MP_model)
         self.define_surgery_time_constraints(self.MP_model)
@@ -585,7 +631,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
 
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
@@ -596,7 +642,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -822,7 +868,7 @@ class LBBDPlanner(TwoPhasePlanner):
            or (model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -832,7 +878,7 @@ class LBBDPlanner(TwoPhasePlanner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -976,6 +1022,10 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
     def define_MP(self):
         self.define_sets(self.MP_model)
         self.define_x_variables(self.MP_model)
+        self.define_x_delay_variables(self.MP_model)
+        self.define_single_surgery_delay_constraints(self.MP_model)
+        self.define_robustness_constraints(self.MP_model)
+        self.define_delay_implication_constraint(self.MP_model)
         self.define_parameters(self.MP_model)
         self.define_single_surgery_constraints(self.MP_model)
         self.define_surgery_time_constraints(self.MP_model)
