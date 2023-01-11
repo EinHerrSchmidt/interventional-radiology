@@ -17,7 +17,7 @@ logging.basicConfig(filename='./planner/times_collecting/times/fch_times.log',
                     encoding='utf-8',
                     level=logging.INFO,
                     filemode="w")
-logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tMP_building_time\tSP_building_time\tTotal_run_time\tMP_Solver_time\tSP_Solver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tObjective_Function_LB\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tCumulated_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tMP_Objective_Function_Value\tSP_Objective_Function_Value\tMP_Upper_Bound\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tObjective_Function_LB\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
 for solver in solvers:
     for s in size:
@@ -49,7 +49,8 @@ for solver in solvers:
                         dataDescriptor)
                     t = time.time()
                     dataMaker.print_data(dataDictionary)
-                    runInfo = planner.solve_model(dataDictionary)
+                    planner.solve_model(dataDictionary)
+                    run_info = planner.extract_run_info()
                     elapsed = (time.time() - t)
 
                     solution = planner.extract_solution()
@@ -62,29 +63,19 @@ for solver in solvers:
                                     + str(c) + "\t"
                                     + str(a) + "\t"
                                     + str(at) + "\t"
-                                    + str(runInfo["MPBuildingTime"]) + "\t"
-                                    +
-                                    str(runInfo["SP_building_time"]) + "\t"
+                                    + str(run_info["cumulated_building_time"]) + "\t"
                                     + str(round(elapsed, 2)) + "\t"
-                                    + str(runInfo["MP_solver_time"]) + "\t"
-                                    + str(runInfo["SP_solver_time"]) + "\t"
-                                    + str(runInfo["status_ok"]) + "\t"
-                                    + str(runInfo["MPobjectiveValue"]) + "\t"
-                                    + str(runInfo["SPobjectiveValue"]) + "\t"
-                                    + str(runInfo["MP_upper_bound"]) + "\t"
-                                    + str(runInfo["MP_time_limit_hit"]) + "\t"
-                                    + str(runInfo["SP_time_limit_hit"]) + "\t"
-                                    +
-                                    str(runInfo["objectiveFunctionLB"]) + "\t"
-                                    +
-                                    str(usageInfo["Specialty1ORUsage"]) + "\t"
-                                    +
-                                    str(usageInfo["Specialty2ORUsage"]) + "\t"
-                                    +
-                                    str(
-                                        usageInfo["Specialty1SelectedRatio"]) + "\t"
-                                    +
-                                    str(usageInfo["Specialty2SelectedRatio"])
+                                    + str(run_info["solver_time"]) + "\t"
+                                    + str(run_info["status_ok"]) + "\t"
+                                    + str(run_info["MP_objective_function_value"]) + "\t"
+                                    + str(run_info["objective_function_value"]) + "\t"
+                                    + str(run_info["MP_upper_bound"]) + "\t"
+                                    + str(run_info["MP_time_limit_hit"]) + "\t"
+                                    + str(run_info["time_limit_hit"]) + "\t"
+                                    + str(usageInfo["Specialty1ORUsage"]) + "\t"
+                                    + str(usageInfo["Specialty2ORUsage"]) + "\t"
+                                    + str(usageInfo["Specialty1SelectedRatio"]) + "\t"
+                                    + str(usageInfo["Specialty2SelectedRatio"])
                                     )
 
                     # sv.print_solution(solution)
