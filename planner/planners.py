@@ -517,6 +517,10 @@ class TwoPhasePlanner(Planner):
     def define_SP(self):
         self.define_sets(self.SP_model)
         self.define_x_variables(self.SP_model)
+        self.define_x_delay_variables(self.SP_model)
+        self.define_single_surgery_delay_constraints(self.SP_model)
+        self.define_robustness_constraints(self.SP_model)
+        self.define_delay_implication_constraint(self.SP_model)
         self.define_parameters(self.SP_model)
         self.define_single_surgery_constraints(self.SP_model)
         self.define_surgery_time_constraints(self.SP_model)
@@ -568,6 +572,10 @@ class TwoPhasePlanner(Planner):
                 for i in self.SP_instance.i:
                     if(round(self.SP_instance.x[i, k, t].value) == 1):
                         p = self.SP_instance.p[i]
+                        if(round(self.SP_instance.x_d[i, k, t].value) == 1):
+                            d = 1
+                        else:
+                            d = 0
                         c = self.SP_instance.c[i]
                         a = self.SP_instance.a[i]
                         anesthetist = 0
@@ -579,7 +587,7 @@ class TwoPhasePlanner(Planner):
                         priority = self.SP_instance.r[i]
                         precedence = self.SP_instance.precedence[i]
                         patients.append(Patient(
-                            i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
+                            i, priority, k, specialty, t, p, d, c, precedence, None, a, anesthetist, order, d))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
@@ -610,6 +618,10 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
 
     @abstractmethod
     def fix_SP_x_variables(self):
+        pass
+
+    @abstractmethod
+    def fix_SP_x_delay_variables(self):
         pass
 
     @abstractmethod
@@ -697,6 +709,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         self.create_SP_instance(data)
 
         self.fix_SP_x_variables()
+        self.fix_SP_x_delay_variables()
         self.solve_SP()
 
         self.status_ok = self.SP_model.results.solver.status == SolverStatus.ok
@@ -749,6 +762,20 @@ class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
                         self.SP_instance.x[i1, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
+
+    def fix_SP_x_delay_variables(self):
+        print("Fixing x_d variables for phase two...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1 and self.SP_instance.a[i1] == 0):
+                        #self.SP_instance.x_d[i1, k, t].fix(1)
+                        fixed += 1
+                    if(round(self.MP_instance.x_d[i1, k, t].value) == 0):
+                        #self.SP_instance.x_d[i1, k, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " x_d variables fixed.")
 
 
 class FastCompleteLagrangeanHeuristicPlanner(FastCompleteHeuristicPlanner):
@@ -808,6 +835,17 @@ class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
                         self.SP_instance.x[i, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
+
+    def fix_SP_x_delay_variables(self):
+        print("Fixing x_d variables for phase two...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i in self.MP_instance.i:
+                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                        self.SP_instance.x_d[i, k, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " x_d variables fixed.")
 
 
 class SlowCompleteLagrangeanHeuristicPlanner(SlowCompleteHeuristicPlanner):
@@ -912,6 +950,19 @@ class LBBDPlanner(TwoPhasePlanner):
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
 
+    def fix_SP_x_delay_variables(self):
+        print("Fixing x_d variables for SP...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1):
+                        self.SP_instance.x_d[i1, k, t].fix(1)
+                    else:
+                        self.SP_instance.x_d[i1, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x_d variables fixed.")
+
     def extend_data(self, data):
         dict = {}
         for i in range(1, self.MP_instance.I + 1):
@@ -979,6 +1030,7 @@ class LBBDPlanner(TwoPhasePlanner):
             # SP
             self.create_SP_instance(data)
             self.fix_SP_x_variables()
+            self.fix_SP_x_delay_variables()
             self.solve_SP()
 
             # no solution found, but solver status is fine: need to add a cut
@@ -1038,6 +1090,10 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
     def define_SMP(self):
         self.define_sets(self.SMP_model)
         self.define_x_variables(self.SMP_model)
+        self.define_x_delay_variables(self.SMP_model)
+        self.define_single_surgery_delay_constraints(self.SMP_model)
+        self.define_robustness_constraints(self.SMP_model)
+        self.define_delay_implication_constraint(self.SMP_model)
         self.define_parameters(self.SMP_model)
         self.define_single_surgery_constraints(self.SMP_model)
         self.define_surgery_time_constraints(self.SMP_model)
@@ -1072,6 +1128,19 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
                         self.SMP_instance.x[i1, k, t].fix(0)
                     fixed += 1
         print(str(fixed) + " x variables fixed.")
+
+    def fix_SMP_x_delay_variables(self):
+        print("Fixing x_d variables for SMP...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i1 in self.MP_instance.i:
+                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1):
+                        self.SMP_instance.x_d[i1, k, t].fix(1)
+                    else:
+                        self.SMP_instance.x_d[i1, k, t].fix(0)
+                    fixed += 1
+        print(str(fixed) + " x_d variables fixed.")
 
     def define_model(self):
         self.define_MP()
@@ -1111,6 +1180,7 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
 
             self.create_SMP_instance(data)
             self.fix_SMP_x_variables()
+            self.fix_SMP_x_delay_variables()
             self.solve_SMP()
 
             if self.fail:
@@ -1124,6 +1194,7 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
             # SP
             self.create_SP_instance(data)
             self.fix_SP_x_variables()
+            self.fix_SP_x_delay_variables()
             self.solve_SP()
 
             # no solution found, but solver status is fine: need to add a cut

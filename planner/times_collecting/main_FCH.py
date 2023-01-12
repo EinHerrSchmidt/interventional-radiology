@@ -78,5 +78,5 @@ for solver in solvers:
                                     + str(usageInfo["Specialty2SelectedRatio"])
                                     )
 
-                    # sv.print_solution(solution)
-                    # sv.plot_graph(solution)
+                    sv.print_solution(solution)
+                    sv.plot_graph(solution)

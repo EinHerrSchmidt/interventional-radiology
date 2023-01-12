@@ -10,10 +10,10 @@ if __name__ == '__main__':
     # "slow" complete heuristic
     #os.system("python -m planner.times_collecting.main_SCH False")
     # "fast" complete heuristic
-    #os.system("python -m planner.times_collecting.main_FCH False")
+    os.system("python -m planner.times_collecting.main_FCH False")
     # vanilla
     #os.system("python -m planner.times_collecting.main_vanilla")
     # LBBD
-    os.system("python -m planner.times_collecting.main_LBBD False 10")
+    # os.system("python -m planner.times_collecting.main_LBBD False 10")
     # 3-phase LBBD
     #os.system("python -m planner.times_collecting.main_LBBD.py True 10")
