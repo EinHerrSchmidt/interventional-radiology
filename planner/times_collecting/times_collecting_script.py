@@ -8,9 +8,9 @@ if __name__ == '__main__':
     # lagrangian "fast" complete heuristic
     #os.system("python -m planner.times_collecting.main_FCH True")
     # "slow" complete heuristic
-    #os.system("python -m planner.times_collecting.main_SCH False")
+    os.system("python -m planner.times_collecting.main_SCH False")
     # "fast" complete heuristic
-    os.system("python -m planner.times_collecting.main_FCH False")
+    # os.system("python -m planner.times_collecting.main_FCH False")
     # vanilla
     #os.system("python -m planner.times_collecting.main_vanilla")
     # LBBD

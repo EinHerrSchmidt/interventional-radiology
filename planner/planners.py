@@ -75,7 +75,7 @@ class Planner(ABC):
 
     @staticmethod
     def robustness_constraints_rule(model, k, t):
-        return sum(model.x_d[i, k, t] for i in model.i) <= 3
+        return sum(model.x_d[i, k, t] for i in model.i) <= 1
 
     @staticmethod
     def delay_implication_constraint_rule(model, i, k, t):
@@ -83,7 +83,7 @@ class Planner(ABC):
 
     @staticmethod
     def surgery_time_rule(model, k, t):
-        return sum(model.p[i] * model.x[i, k, t] for i in model.i) <= model.s[k, t]
+        return sum(model.p[i] * model.x[i, k, t] + model.d[i] * model.x_d[i, k, t] for i in model.i) <= model.s[k, t]
 
     @staticmethod
     def specialty_assignment_rule(model, j, k, t):
@@ -97,7 +97,20 @@ class Planner(ABC):
 
     @staticmethod
     def anesthetist_time_rule(model, alpha, t):
-        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) <= model.An[alpha, t]
+        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[alpha, i, k, t] * model. d[i] for i in model.i for k in model.k) <= model.An[alpha, t]
+
+    # needed for linearizing product of binary variables
+    @staticmethod
+    def z_rule_1(model, alpha, i, k, t):
+        return model.z[alpha, i, k, t] <= model.beta[alpha, i, t]
+
+    @staticmethod
+    def z_rule_2(model, alpha, i, k, t):
+        return model.z[alpha, i, k, t] <= model.x_d[i, k, t]
+
+    @staticmethod
+    def z_rule_3(model, alpha, i, k, t):
+        return model.z[alpha, i, k, t] >= model.beta[alpha, i, t] + model.x_d[i, k, t] - 1
 
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
@@ -237,6 +250,28 @@ class Planner(ABC):
             model.t,
             rule=self.exclusive_precedence_rule)
 
+    def define_z_constraints(self, model):
+        model.z_constraints_1 = pyo.Constraint(
+            model.alpha,
+            model.i,
+            model.k,
+            model.t,
+            rule=self.z_rule_1)
+
+        model.z_constraints_2 = pyo.Constraint(
+            model.alpha,
+            model.i,
+            model.k,
+            model.t,
+            rule=self.z_rule_2)
+
+        model.z_constraints_3 = pyo.Constraint(
+            model.alpha,
+            model.i,
+            model.k,
+            model.t,
+            rule=self.z_rule_3)
+
     def define_objective(self, model):
         model.objective = pyo.Objective(
             rule=self.objective_function,
@@ -298,6 +333,13 @@ class Planner(ABC):
                        model.t,
                        domain=pyo.Binary)
 
+    def define_z_variables(self, model):
+        model.z = pyo.Var(model.alpha,
+                          model.i,
+                          model.k,
+                          model.t,
+                          domain=pyo.Binary)
+
     def define_parameters(self, model):
         model.p = pyo.Param(model.i)
         model.d = pyo.Param(model.i)
@@ -323,7 +365,7 @@ class SimplePlanner(Planner):
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + model.d[i1] * model.x_d[i1, k1, t] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     @staticmethod
     def lambda_rule(model, i1, i2, t):
@@ -502,6 +544,8 @@ class TwoPhasePlanner(Planner):
         self.define_beta_variables(self.MP_model)
         self.define_anesthetists_availability(self.MP_model)
         self.define_anesthetist_assignment_constraint(self.MP_model)
+        self.define_z_variables(self.MP_model)
+        self.define_z_constraints(self.MP_model)
         self.define_anesthetist_time_constraint(self.MP_model)
 
     def define_x_parameters(self):
@@ -530,6 +574,8 @@ class TwoPhasePlanner(Planner):
         self.define_beta_variables(self.SP_model)
         self.define_anesthetists_availability(self.SP_model)
         self.define_anesthetist_assignment_constraint(self.SP_model)
+        self.define_z_variables(self.SP_model)
+        self.define_z_constraints(self.SP_model)
         self.define_anesthetist_time_constraint(self.SP_model)
 
         # SP's components
@@ -573,9 +619,11 @@ class TwoPhasePlanner(Planner):
                     if(round(self.SP_instance.x[i, k, t].value) == 1):
                         p = self.SP_instance.p[i]
                         if(round(self.SP_instance.x_d[i, k, t].value) == 1):
-                            d = 1
+                            d = True
+                            arrival_delay = self.SP_instance.d[i]
                         else:
-                            d = 0
+                            d = False
+                            arrival_delay = 0
                         c = self.SP_instance.c[i]
                         a = self.SP_instance.a[i]
                         anesthetist = 0
@@ -587,7 +635,7 @@ class TwoPhasePlanner(Planner):
                         priority = self.SP_instance.r[i]
                         precedence = self.SP_instance.precedence[i]
                         patients.append(Patient(
-                            i, priority, k, specialty, t, p, d, c, precedence, None, a, anesthetist, order, d))
+                            i, priority, k, specialty, t, p, arrival_delay, c, precedence, None, a, anesthetist, order, d))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
@@ -634,7 +682,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + model.d[i1] * model.x_d[i1, k1, t] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     @staticmethod
     def end_of_day_rule(model, i, k, t):
@@ -880,7 +928,7 @@ class LBBDPlanner(TwoPhasePlanner):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
            or (model.x_param[i1, k1, t] + model.x_param[i2, k2, t] < 2)):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k1, t] * model.d[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms
     @staticmethod
