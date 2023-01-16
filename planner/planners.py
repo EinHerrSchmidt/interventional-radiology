@@ -75,7 +75,7 @@ class Planner(ABC):
 
     @staticmethod
     def robustness_constraints_rule(model, k, t):
-        return sum(model.x_d[i, k, t] for i in model.i) <= 1
+        return sum(model.x_d[i, k, t] for i in model.i) <= 2
 
     @staticmethod
     def delay_implication_constraint_rule(model, i, k, t):
@@ -353,6 +353,18 @@ class Planner(ABC):
         model.bigM = pyo.Param(model.bigMRangeSet)
         model.precedence = pyo.Param(model.i)
 
+    def fix_z_variables(self, model_instance):
+        print("Fixing z variables...")
+        fixed = 0
+        for alpha in model_instance.alpha:
+            for i in model_instance.i:
+                for k in model_instance.k:
+                    for t in model_instance.t:
+                        if(model_instance.a[i] == 0):
+                            model_instance.z[alpha, i, k, t].fix(0)
+                            fixed += 1
+        print(str(fixed) + " z variables fixed.")
+
 
 class SimplePlanner(Planner):
 
@@ -429,6 +441,8 @@ class SimplePlanner(Planner):
         self.define_gamma_variables(self.model)
 
         self.define_anesthetist_assignment_constraint(self.model)
+        self.define_z_variables(self.model)
+        self.define_z_constraints(self.model)
         self.define_anesthetist_time_constraint(self.model)
         self.define_anesthetist_no_overlap_constraint(self.model)
         self.define_lambda_constraint(self.model)
@@ -467,6 +481,12 @@ class SimplePlanner(Planner):
                 for i in self.model_instance.i:
                     if(round(self.model_instance.x[i, k, t].value) == 1):
                         p = self.model_instance.p[i]
+                        if(round(self.model_instance.x_d[i, k, t].value) == 1):
+                            d = True
+                            arrival_delay = self.model_instance.d[i]
+                        else:
+                            d = False
+                            arrival_delay = 0
                         c = self.model_instance.c[i]
                         a = self.model_instance.a[i]
                         anesthetist = 0
@@ -478,7 +498,7 @@ class SimplePlanner(Planner):
                         priority = self.model_instance.r[i]
                         precedence = self.model_instance.precedence[i]
                         patients.append(Patient(
-                            i, priority, k, specialty, t, p, c, precedence, None, a, anesthetist, order))
+                            i, priority, k, specialty, t, p, arrival_delay, c, precedence, None, a, anesthetist, order, d))
                 patients.sort(key=lambda x: x.order)
                 dict[(k, t)] = patients
         return dict
@@ -497,6 +517,7 @@ class SimplePlanner(Planner):
         self.create_model_instance(data)
         self.reset_run_info()
         self.fix_y_variables(self.model_instance)
+        self.fix_z_variables(self.model_instance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.model_instance, tee=True)
         print("\nModel instance solved.")
@@ -746,6 +767,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         self.define_model()
         self.reset_run_info()
         self.create_MP_instance(data)
+        self.fix_z_variables(self.MP_instance)
 
         # MP
         self.solve_MP()
@@ -755,6 +777,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
 
         # SP
         self.create_SP_instance(data)
+        self.fix_z_variables(self.SP_instance)
 
         self.fix_SP_x_variables()
         self.fix_SP_x_delay_variables()

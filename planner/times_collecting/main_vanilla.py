@@ -21,7 +21,7 @@ if __name__ == '__main__':
                 for a in anesthesia:
                     for at in anesthetists:
                         
-                        planner = SimplePlanner(600, 0.05, solver)
+                        planner = SimplePlanner(600, 0.0, solver)
 
                         dataDescriptor = DataDescriptor()
 
@@ -45,8 +45,8 @@ if __name__ == '__main__':
                         solution = planner.extract_solution()
                         sv = SolutionVisualizer()
                         usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
-                        # sv.print_solution(solution)
-                        # sv.plot_graph(solution)
+                        sv.print_solution(solution)
+                        sv.plot_graph(solution)
 
                         logging.info(solver + "\t"
                                         + str(s) + "\t"

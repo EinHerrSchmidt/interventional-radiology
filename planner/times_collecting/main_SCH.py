@@ -27,9 +27,9 @@ for solver in solvers:
                     
                     planner = None
                     if(variant):
-                        planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
+                        planner = SlowCompleteLagrangeanHeuristicPlanner(timeLimit=590, gap=0.0, solver=solver)
                     else:
-                        planner = SlowCompleteHeuristicPlanner(timeLimit=590, gap=0.005, solver=solver)
+                        planner = SlowCompleteHeuristicPlanner(timeLimit=590, gap=0.0, solver=solver)
 
                     dataDescriptor = DataDescriptor()
 
