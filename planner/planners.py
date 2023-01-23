@@ -69,6 +69,7 @@ class Planner(ABC):
     def single_surgery_rule(model, i):
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
+    # these constraints are not strictly necessary (possibly might improve solving speed, but it has to be investigated further)
     @staticmethod
     def single_surgery_delay_rule(model, i):
         return sum(model.x_d[i, k, t] for k in model.k for t in model.t) <= 1
@@ -553,7 +554,7 @@ class TwoPhasePlanner(Planner):
         self.define_sets(self.MP_model)
         self.define_x_variables(self.MP_model)
         self.define_x_delay_variables(self.MP_model)
-        self.define_single_surgery_delay_constraints(self.MP_model)
+        # self.define_single_surgery_delay_constraints(self.MP_model)
         self.define_robustness_constraints(self.MP_model)
         self.define_delay_implication_constraint(self.MP_model)
         self.define_parameters(self.MP_model)
@@ -583,7 +584,7 @@ class TwoPhasePlanner(Planner):
         self.define_sets(self.SP_model)
         self.define_x_variables(self.SP_model)
         self.define_x_delay_variables(self.SP_model)
-        self.define_single_surgery_delay_constraints(self.SP_model)
+        # self.define_single_surgery_delay_constraints(self.SP_model)
         self.define_robustness_constraints(self.SP_model)
         self.define_delay_implication_constraint(self.SP_model)
         self.define_parameters(self.SP_model)
@@ -1146,7 +1147,7 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
         self.define_sets(self.MP_model)
         self.define_x_variables(self.MP_model)
         self.define_x_delay_variables(self.MP_model)
-        self.define_single_surgery_delay_constraints(self.MP_model)
+        # self.define_single_surgery_delay_constraints(self.MP_model)
         self.define_robustness_constraints(self.MP_model)
         self.define_delay_implication_constraint(self.MP_model)
         self.define_parameters(self.MP_model)
@@ -1162,7 +1163,7 @@ class ThreePhaseLBBDPlanner(LBBDPlanner):
         self.define_sets(self.SMP_model)
         self.define_x_variables(self.SMP_model)
         self.define_x_delay_variables(self.SMP_model)
-        self.define_single_surgery_delay_constraints(self.SMP_model)
+        # self.define_single_surgery_delay_constraints(self.SMP_model)
         self.define_robustness_constraints(self.SMP_model)
         self.define_delay_implication_constraint(self.SMP_model)
         self.define_parameters(self.SMP_model)
