@@ -179,6 +179,14 @@ class DataMaker:
                 dict[(a + 1, t + 1)] = anesthesiaTime
         return dict
 
+    def create_robustness_parameter_table(self, Q, K, T, robustness=3):
+        dict = {}
+        for q in range(0, Q):
+            for k in range(0, K):
+                for t in range(0, T):
+                    dict[(q + 1, k + 1, t + 1)] = robustness
+        return dict
+
     def create_patient_specialty_table(self, I, J, specialtyLabels):
         dict = {}
         for i in range(0, I):
@@ -317,13 +325,23 @@ class DataMaker:
             times.append(self.surgeryRoomArrivalDelayMapping[operation])
         return times
 
+    def create_delay_table(self, Q, operations):
+        dict = {}
+        for q in range(0, Q):
+            i = 0
+            for operation in operations:
+                dict[(q + 1, i + 1)] = self.surgeryRoomArrivalDelayMapping[operation]
+                i += 1
+        return dict
+
     def create_data_dictionary(self, dataDescriptor: DataDescriptor):
         operatingRoomTimes = self.create_room_timetable(dataDescriptor.operatingRooms, dataDescriptor.days, dataDescriptor.operatingDayDuration)
         anesthetistsTimes = self.create_anestethists_timetable(dataDescriptor.anesthetists, dataDescriptor.days, dataDescriptor.anesthesiaTime)
+        robustness_table = self.create_robustness_parameter_table(Q=1, K=dataDescriptor.operatingRooms, T=dataDescriptor.days)
         UOs = self.draw_UO(dataDescriptor.patients)
         operations = self.draw_operations_given_UO(UOs)
         operatingTimes = self.compute_operating_times(operations)
-        arrivalDelays = self.compute_arrival_delays(operations)
+        arrivalDelays = self.create_delay_table(Q=1, operations=operations)
         priorities = self.generate_uniform_sample(dataDescriptor.patients, 10, 120)
         anesthesiaFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.anesthesiaFrequence, isSpecialty=False)
         covidFlags = self.generate_binomial_sample(dataDescriptor.patients, dataDescriptor.covidFrequence, isSpecialty=False)
@@ -343,11 +361,13 @@ class DataMaker:
                 'T': {None: dataDescriptor.days},
                 'A': {None: dataDescriptor.anesthetists},
                 'M': {None: 7},
+                'Q': {None: 1},
                 's': operatingRoomTimes,
                 'An': anesthetistsTimes,
+                'Gamma': robustness_table,
                 'tau': self.create_room_specialty_assignment(dataDescriptor.specialties, dataDescriptor.operatingRooms, dataDescriptor.days),
                 'p': self.create_dictionary_entry(operatingTimes, toRound=False),
-                'd': self.create_dictionary_entry(arrivalDelays, toRound=False),
+                'd': arrivalDelays,
                 'r': self.create_dictionary_entry(priorities, toRound=False),
                 'a': self.create_dictionary_entry(anesthesiaFlags, toRound=False),
                 'c': self.create_dictionary_entry(covidFlags, toRound=False),
@@ -373,7 +393,7 @@ class DataMaker:
             priority = data[None]['r'][(i + 1)]
             specialty = data[None]['specialty'][(i + 1)]
             operatingTime = data[None]['p'][(i + 1)]
-            arrival_delay = data[None]['d'][(i + 1)]
+            arrival_delay = data[None]['d'][(1, i + 1)]
             covid = data[None]['c'][(i + 1)]
             anesthesia = data[None]['a'][(i + 1)]
             precedence = data[None]['precedence'][(i + 1)]

@@ -69,22 +69,21 @@ class Planner(ABC):
     def single_surgery_rule(model, i):
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
-    # these constraints are not strictly necessary (possibly might improve solving speed, but it has to be investigated further)
     @staticmethod
     def single_surgery_delay_rule(model, i):
-        return sum(model.x_d[i, k, t] for k in model.k for t in model.t) <= 1
+        return sum(model.delta[q, i, k, t] for k in model.k for t in model.t for q in model.q) <= 1
 
     @staticmethod
-    def robustness_constraints_rule(model, k, t):
-        return sum(model.x_d[i, k, t] for i in model.i) <= 2
+    def robustness_constraints_rule(model, q, k, t):
+        return sum(model.delta[q, i, k, t] for i in model.i) <= model.Gamma[q, k, t]
 
     @staticmethod
     def delay_implication_constraint_rule(model, i, k, t):
-        return model.x[i, k, t] >= model.x_d[i, k, t]
+        return model.x[i, k, t] >= sum(model.delta[q, i, k, t] for q in model.q)
 
     @staticmethod
     def surgery_time_rule(model, k, t):
-        return sum(model.p[i] * model.x[i, k, t] + model.d[i] * model.x_d[i, k, t] for i in model.i) <= model.s[k, t]
+        return sum(model.p[i] * model.x[i, k, t] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) for i in model.i) <= model.s[k, t]
 
     @staticmethod
     def specialty_assignment_rule(model, j, k, t):
@@ -98,20 +97,20 @@ class Planner(ABC):
 
     @staticmethod
     def anesthetist_time_rule(model, alpha, t):
-        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[alpha, i, k, t] * model. d[i] for i in model.i for k in model.k) <= model.An[alpha, t]
+        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q) <= model.An[alpha, t]
 
     # needed for linearizing product of binary variables
     @staticmethod
     def z_rule_1(model, alpha, i, k, t):
-        return model.z[alpha, i, k, t] <= model.beta[alpha, i, t]
+        return sum(model.z[q, alpha, i, k, t] for q in model.q) <= model.beta[alpha, i, t]
 
     @staticmethod
     def z_rule_2(model, alpha, i, k, t):
-        return model.z[alpha, i, k, t] <= model.x_d[i, k, t]
+        return sum(model.z[q, alpha, i, k, t] for q in model.q) <= sum(model.delta[q, i, k, t] for q in model.q)
 
     @staticmethod
     def z_rule_3(model, alpha, i, k, t):
-        return model.z[alpha, i, k, t] >= model.beta[alpha, i, t] + model.x_d[i, k, t] - 1
+        return sum(model.z[q, alpha, i, k, t] for q in model.q) >= model.beta[alpha, i, t] + sum(model.delta[q, i, k, t] for q in model.q) - 1
 
     # patients with same anesthetist on same day but different room cannot overlap
     @staticmethod
@@ -152,7 +151,7 @@ class Planner(ABC):
     def objective_function(model):
         N = 1 / (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
-        return sum(model.d[i] * model.x_d[i, k, t] for i in model.i for k in model.k for t in model.t) + N * R
+        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) + N * R
 
     # constraints
     def define_single_surgery_constraints(self, model):
@@ -167,6 +166,7 @@ class Planner(ABC):
 
     def define_robustness_constraints(self, model):
         model.robustness_constraint = pyo.Constraint(
+            model.q,
             model.k,
             model.t,
             rule=self.robustness_constraints_rule)
@@ -315,12 +315,14 @@ class Planner(ABC):
         model.K = pyo.Param(within=pyo.NonNegativeIntegers)
         model.T = pyo.Param(within=pyo.NonNegativeIntegers)
         model.M = pyo.Param(within=pyo.NonNegativeIntegers)
+        model.Q = pyo.Param(within=pyo.NonNegativeIntegers)
 
         model.i = pyo.RangeSet(1, model.I)
         model.j = pyo.RangeSet(1, model.J)
         model.k = pyo.RangeSet(1, model.K)
         model.t = pyo.RangeSet(1, model.T)
         model.bigMRangeSet = pyo.RangeSet(1, model.M)
+        model.q = pyo.RangeSet(1, model.Q)
 
     def define_x_variables(self, model):
         model.x = pyo.Var(model.i,
@@ -328,14 +330,16 @@ class Planner(ABC):
                           model.t,
                           domain=pyo.Binary)
 
-    def define_x_delay_variables(self, model):
-        model.x_d = pyo.Var(model.i,
-                        model.k,
-                       model.t,
-                       domain=pyo.Binary)
+    def define_delta_variables(self, model):
+        model.delta = pyo.Var(model.q,
+                              model.i,
+                              model.k,
+                              model.t,
+                              domain=pyo.Binary)
 
     def define_z_variables(self, model):
-        model.z = pyo.Var(model.alpha,
+        model.z = pyo.Var(model.q,
+                          model.alpha,
                           model.i,
                           model.k,
                           model.t,
@@ -343,7 +347,7 @@ class Planner(ABC):
 
     def define_parameters(self, model):
         model.p = pyo.Param(model.i)
-        model.d = pyo.Param(model.i)
+        model.d = pyo.Param(model.q, model.i)
         model.r = pyo.Param(model.i)
         model.s = pyo.Param(model.k, model.t)
         model.a = pyo.Param(model.i)
@@ -353,6 +357,7 @@ class Planner(ABC):
         model.specialty = pyo.Param(model.i)
         model.bigM = pyo.Param(model.bigMRangeSet)
         model.precedence = pyo.Param(model.i)
+        model.Gamma = pyo.Param(model.q, model.k, model.t)
 
     def fix_z_variables(self, model_instance):
         print("Fixing z variables...")
@@ -378,7 +383,7 @@ class SimplePlanner(Planner):
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.d[i1] * model.x_d[i1, k1, t] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     @staticmethod
     def lambda_rule(model, i1, i2, t):
@@ -391,7 +396,7 @@ class SimplePlanner(Planner):
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
@@ -400,7 +405,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -423,7 +428,7 @@ class SimplePlanner(Planner):
     def define_model(self):
         self.define_sets(self.model)
         self.define_x_variables(self.model)
-        self.define_x_delay_variables(self.model)
+        self.define_delta_variables(self.model)
         self.define_single_surgery_delay_constraints(self.model)
         self.define_robustness_constraints(self.model)
         self.define_delay_implication_constraint(self.model)
@@ -552,12 +557,12 @@ class TwoPhasePlanner(Planner):
 
     def define_MP(self):
         self.define_sets(self.MP_model)
+        self.define_parameters(self.MP_model)
         self.define_x_variables(self.MP_model)
-        self.define_x_delay_variables(self.MP_model)
-        # self.define_single_surgery_delay_constraints(self.MP_model)
+        self.define_delta_variables(self.MP_model)
+        self.define_single_surgery_delay_constraints(self.MP_model)
         self.define_robustness_constraints(self.MP_model)
         self.define_delay_implication_constraint(self.MP_model)
-        self.define_parameters(self.MP_model)
         self.define_single_surgery_constraints(self.MP_model)
         self.define_surgery_time_constraints(self.MP_model)
         self.define_specialty_assignment_constraints(self.MP_model)
@@ -583,7 +588,7 @@ class TwoPhasePlanner(Planner):
     def define_SP(self):
         self.define_sets(self.SP_model)
         self.define_x_variables(self.SP_model)
-        self.define_x_delay_variables(self.SP_model)
+        self.define_delta_variables(self.SP_model)
         # self.define_single_surgery_delay_constraints(self.SP_model)
         self.define_robustness_constraints(self.SP_model)
         self.define_delay_implication_constraint(self.SP_model)
@@ -704,7 +709,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.d[i1] * model.x_d[i1, k1, t] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     @staticmethod
     def end_of_day_rule(model, i, k, t):
@@ -713,7 +718,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
     @staticmethod
     def time_ordering_precedence_rule(model, i1, i2, k, t):
@@ -724,7 +729,7 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -952,7 +957,7 @@ class LBBDPlanner(TwoPhasePlanner):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
            or (model.x_param[i1, k1, t] + model.x_param[i2, k2, t] < 2)):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k1, t] * model.d[i1] <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     # precedence across rooms
     @staticmethod
@@ -978,7 +983,7 @@ class LBBDPlanner(TwoPhasePlanner):
            or (model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] + model.x_d[i, k, t] * model.d[i] <= model.s[k, t]
+        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
     @staticmethod
@@ -988,7 +993,7 @@ class LBBDPlanner(TwoPhasePlanner):
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + model.x_d[i1, k, t] * model.d[i1] <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     @staticmethod
     def start_time_ordering_priority_rule(model, i1, i2, k, t):
@@ -1098,170 +1103,6 @@ class LBBDPlanner(TwoPhasePlanner):
 
             if self.fail:
                 break
-
-            # SP
-            self.create_SP_instance(data)
-            self.fix_SP_x_variables()
-            self.fix_SP_x_delay_variables()
-            self.solve_SP()
-
-            # no solution found, but solver status is fine: need to add a cut
-            if self.is_infeasible(self.SP_model):
-                self.MP_instance.cuts.add(sum(
-                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
-            else:
-                break
-
-        self.status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
-        self.objective_function_value = self.extract_objective_value()
-
-
-class ThreePhaseLBBDPlanner(LBBDPlanner):
-
-    def __init__(self, timeLimit, gap, iterations_cap, solver):
-        super().__init__(timeLimit, gap, iterations_cap, solver)
-        self.SMP_model = pyo.AbstractModel()
-        self.SMP_instance = None
-
-    @staticmethod
-    def maximum_anesthesia_time_constraint_rule(model, t):
-        if(sum(model.a[i] for i in model.i) == 0):
-            return pyo.Constraint.Skip
-        return (sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) <= model.A * 270)
-
-    def define_maximum_anesthesia_time_constraint(self):
-        self.MP_model.maximum_anesthesia_time_constraint = pyo.Constraint(
-            self.MP_model.t,
-            rule=self.maximum_anesthesia_time_constraint_rule)
-
-    def define_model(self):
-        self.define_MP()
-        self.define_SMP()
-        self.define_SP()
-
-        self.define_objective(self.MP_model)
-        self.define_objective(self.SMP_model)
-        self.define_objective(self.SP_model)
-
-    def define_MP(self):
-        self.define_sets(self.MP_model)
-        self.define_x_variables(self.MP_model)
-        self.define_x_delay_variables(self.MP_model)
-        # self.define_single_surgery_delay_constraints(self.MP_model)
-        self.define_robustness_constraints(self.MP_model)
-        self.define_delay_implication_constraint(self.MP_model)
-        self.define_parameters(self.MP_model)
-        self.define_single_surgery_constraints(self.MP_model)
-        self.define_surgery_time_constraints(self.MP_model)
-        self.define_specialty_assignment_constraints(self.MP_model)
-        self.define_anesthetists_number_param(self.MP_model)
-        self.define_anesthetists_range_set(self.MP_model)
-
-        self.define_maximum_anesthesia_time_constraint()
-
-    def define_SMP(self):
-        self.define_sets(self.SMP_model)
-        self.define_x_variables(self.SMP_model)
-        self.define_x_delay_variables(self.SMP_model)
-        # self.define_single_surgery_delay_constraints(self.SMP_model)
-        self.define_robustness_constraints(self.SMP_model)
-        self.define_delay_implication_constraint(self.SMP_model)
-        self.define_parameters(self.SMP_model)
-        self.define_single_surgery_constraints(self.SMP_model)
-        self.define_surgery_time_constraints(self.SMP_model)
-        self.define_specialty_assignment_constraints(self.SMP_model)
-        self.define_anesthetists_number_param(self.SMP_model)
-        self.define_anesthetists_range_set(self.SMP_model)
-
-        self.define_beta_variables(self.SMP_model)
-        self.define_anesthetists_availability(self.SMP_model)
-        self.define_anesthetist_assignment_constraint(self.SMP_model)
-        self.define_anesthetist_time_constraint(self.SMP_model)
-
-    def create_SMP_instance(self, data):
-        print("Creating SMP instance...")
-        t = time.time()
-        self.SMP_instance = self.SMP_model.create_instance(data)
-        elapsed = (time.time() - t)
-        print("SMP instance created in " + str(round(elapsed, 2)) + "s")
-        # logging.basicConfig(filename='times.log', encoding='utf-8', level=logging.INFO)
-        # logging.info("MP instance created in " + str(round(elapsed, 2)) + "s")
-        self.cumulated_building_time += elapsed
-
-    def fix_SMP_x_variables(self):
-        print("Fixing x variables for SMP...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x[i1, k, t].value) == 1):
-                        self.SMP_instance.x[i1, k, t].fix(1)
-                    else:
-                        self.SMP_instance.x[i1, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_SMP_x_delay_variables(self):
-        print("Fixing x_d variables for SMP...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1):
-                        self.SMP_instance.x_d[i1, k, t].fix(1)
-                    else:
-                        self.SMP_instance.x_d[i1, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x_d variables fixed.")
-
-    def define_model(self):
-        self.define_MP()
-        self.define_SMP()
-        self.define_SP()
-
-        self.define_objective(self.MP_model)
-        self.define_objective(self.SMP_model)
-        self.define_objective(self.SP_model)
-
-    def solve_SMP(self):
-        print("Solving SMP instance...")
-        self.SMP_model.results = self.solver.solve(
-            self.SMP_instance, tee=False)
-        print("\nSMP instance solved.")
-        self.solver_time += self.solver._last_solve_time
-
-        self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-            self.solver._last_solve_time
-        self.fail = self.solver.options[self.timeLimit] <= 0
-
-    def solve_model(self, data):
-        self.define_model()
-        self.create_MP_instance(data)
-        self.MP_instance.cuts = pyo.ConstraintList()
-
-        self.solver_time = 0
-        self.iterations = 0
-        self.fail = False
-        while self.iterations < self.iterations_cap:
-            self.iterations += 1
-
-            self.solve_MP()
-
-            if self.fail:
-                break
-
-            self.create_SMP_instance(data)
-            self.fix_SMP_x_variables()
-            self.fix_SMP_x_delay_variables()
-            self.solve_SMP()
-
-            if self.fail:
-                break
-
-            if self.is_infeasible(self.SMP_model):
-                self.MP_instance.cuts.add(sum(
-                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
-                continue
 
             # SP
             self.create_SP_instance(data)
