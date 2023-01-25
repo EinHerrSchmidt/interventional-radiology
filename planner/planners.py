@@ -7,6 +7,7 @@ import plotly.express as px
 import pandas as pd
 import datetime
 from pyomo.opt import SolverStatus, TerminationCondition
+from math import isclose
 
 from abc import ABC, abstractmethod
 
@@ -70,7 +71,7 @@ class Planner(ABC):
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
     @staticmethod
-    def single_surgery_delay_rule(model, i):
+    def single_delay_rule(model, i):
         return sum(model.delta[q, i, k, t] for k in model.k for t in model.t for q in model.q) <= 1
 
     @staticmethod
@@ -151,7 +152,7 @@ class Planner(ABC):
     def objective_function(model):
         N = 1 / (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
-        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) + N * R
+        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) * 667 + 10000 * N * R
 
     # constraints
     def define_single_surgery_constraints(self, model):
@@ -159,10 +160,10 @@ class Planner(ABC):
             model.i,
             rule=self.single_surgery_rule)
 
-    def define_single_surgery_delay_constraints(self, model):
+    def define_single_delay_constraints(self, model):
         model.single_surgery_delay_constraint = pyo.Constraint(
             model.i,
-            rule=self.single_surgery_delay_rule)
+            rule=self.single_delay_rule)
 
     def define_robustness_constraints(self, model):
         model.robustness_constraint = pyo.Constraint(
@@ -359,18 +360,6 @@ class Planner(ABC):
         model.precedence = pyo.Param(model.i)
         model.Gamma = pyo.Param(model.q, model.k, model.t)
 
-    def fix_z_variables(self, model_instance):
-        print("Fixing z variables...")
-        fixed = 0
-        for alpha in model_instance.alpha:
-            for i in model_instance.i:
-                for k in model_instance.k:
-                    for t in model_instance.t:
-                        if(model_instance.a[i] == 0):
-                            model_instance.z[alpha, i, k, t].fix(0)
-                            fixed += 1
-        print(str(fixed) + " z variables fixed.")
-
 
 class SimplePlanner(Planner):
 
@@ -427,12 +416,12 @@ class SimplePlanner(Planner):
 
     def define_model(self):
         self.define_sets(self.model)
+        self.define_parameters(self.model)
         self.define_x_variables(self.model)
         self.define_delta_variables(self.model)
-        self.define_single_surgery_delay_constraints(self.model)
+        self.define_single_delay_constraints(self.model)
         self.define_robustness_constraints(self.model)
         self.define_delay_implication_constraint(self.model)
-        self.define_parameters(self.model)
 
         self.define_single_surgery_constraints(self.model)
         self.define_surgery_time_constraints(self.model)
@@ -487,9 +476,9 @@ class SimplePlanner(Planner):
                 for i in self.model_instance.i:
                     if(round(self.model_instance.x[i, k, t].value) == 1):
                         p = self.model_instance.p[i]
-                        if(round(self.model_instance.x_d[i, k, t].value) == 1):
+                        if(sum(round(self.model_instance.delta[q, i, k, t].value) for q in self.model_instance.q) == 1):
                             d = True
-                            arrival_delay = self.model_instance.d[i]
+                            arrival_delay = self.model_instance.d[1, i]
                         else:
                             d = False
                             arrival_delay = 0
@@ -523,7 +512,6 @@ class SimplePlanner(Planner):
         self.create_model_instance(data)
         self.reset_run_info()
         self.fix_y_variables(self.model_instance)
-        self.fix_z_variables(self.model_instance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.model_instance, tee=True)
         print("\nModel instance solved.")
@@ -560,7 +548,7 @@ class TwoPhasePlanner(Planner):
         self.define_parameters(self.MP_model)
         self.define_x_variables(self.MP_model)
         self.define_delta_variables(self.MP_model)
-        self.define_single_surgery_delay_constraints(self.MP_model)
+        self.define_single_delay_constraints(self.MP_model)
         self.define_robustness_constraints(self.MP_model)
         self.define_delay_implication_constraint(self.MP_model)
         self.define_single_surgery_constraints(self.MP_model)
@@ -587,12 +575,12 @@ class TwoPhasePlanner(Planner):
 
     def define_SP(self):
         self.define_sets(self.SP_model)
+        self.define_parameters(self.SP_model)
         self.define_x_variables(self.SP_model)
         self.define_delta_variables(self.SP_model)
-        # self.define_single_surgery_delay_constraints(self.SP_model)
+        self.define_single_delay_constraints(self.SP_model)
         self.define_robustness_constraints(self.SP_model)
         self.define_delay_implication_constraint(self.SP_model)
-        self.define_parameters(self.SP_model)
         self.define_single_surgery_constraints(self.SP_model)
         self.define_surgery_time_constraints(self.SP_model)
         self.define_specialty_assignment_constraints(self.SP_model)
@@ -645,9 +633,9 @@ class TwoPhasePlanner(Planner):
                 for i in self.SP_instance.i:
                     if(round(self.SP_instance.x[i, k, t].value) == 1):
                         p = self.SP_instance.p[i]
-                        if(round(self.SP_instance.x_d[i, k, t].value) == 1):
+                        if(sum(round(self.SP_instance.delta[q, i, k, t].value) for q in self.SP_instance.q) == 1):
                             d = True
-                            arrival_delay = self.SP_instance.d[i]
+                            arrival_delay = self.SP_instance.d[1, i]
                         else:
                             d = False
                             arrival_delay = 0
@@ -689,19 +677,12 @@ class TwoPhasePlanner(Planner):
             TerminationCondition.maxTimeLimit]
 
 
-class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
+class LBBDPlanner(TwoPhasePlanner):
 
-    @abstractmethod
-    def fix_SP_x_variables(self):
-        pass
-
-    @abstractmethod
-    def fix_SP_x_delay_variables(self):
-        pass
-
-    @abstractmethod
-    def extend_data(self, data):
-        pass
+    def __init__(self, timeLimit, gap, iterations_cap, solver):
+        super().__init__(timeLimit, gap, solver)
+        self.iterations_cap = iterations_cap
+        self.fail = False
 
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
@@ -769,113 +750,6 @@ class TwoPhaseHeuristicPlanner(TwoPhasePlanner):
                 "time_limit_hit": self.time_limit_hit
                 }
 
-    def solve_model(self, data):
-        self.define_model()
-        self.reset_run_info()
-        self.create_MP_instance(data)
-        self.fix_z_variables(self.MP_instance)
-
-        # MP
-        self.solve_MP()
-
-        self.solver.options[self.timeLimit] = max(
-            10, 600 - self.solver._last_solve_time)
-
-        # SP
-        self.create_SP_instance(data)
-        self.fix_z_variables(self.SP_instance)
-
-        self.fix_SP_x_variables()
-        self.fix_SP_x_delay_variables()
-        self.solve_SP()
-
-        self.status_ok = self.SP_model.results.solver.status == SolverStatus.ok
-        self.objective_function_value = pyo.value(self.SP_instance.objective)
-
-
-class FastCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
-
-    @staticmethod
-    def lambda_rule(model, i1, i2, t):
-        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
-            return pyo.Constraint.Skip
-        i1_all_day = 0
-        i2_all_day = 0
-        for k in model.k:
-            # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
-            if(model.status[i1, k, t] == Planner.FIXED and model.status[i2, k, t] == Planner.FIXED):
-                return pyo.Constraint.Skip
-            if(model.status[i1, k, t] == Planner.FIXED or model.status[i1, k, t] == Planner.FREE):
-                i1_all_day += 1
-            if(model.status[i2, k, t] == Planner.FIXED or model.status[i2, k, t] == Planner.FREE):
-                i2_all_day += 1
-        if(i1_all_day == 0 or i2_all_day == 0):
-            return pyo.Constraint.Skip
-        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
-
-    def extend_data(self, data):
-        status_dict = {}
-        for i in range(1, self.MP_instance.I + 1):
-            for k in range(1, self.MP_instance.K + 1):
-                for t in range(1, self.MP_instance.T + 1):
-                    if(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 1):
-                        status_dict[(i, k, t)] = Planner.FREE
-                    elif(round(self.MP_instance.x[i, k, t].value) == 1 and self.MP_instance.a[i] == 0):
-                        status_dict[(i, k, t)] = Planner.FIXED
-                    else:
-                        status_dict[(i, k, t)] = Planner.DISCARDED
-        data[None]['status'] = status_dict
-
-    def fix_SP_x_variables(self):
-        print("Fixing x variables for phase two...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x[i1, k, t].value) == 1 and self.SP_instance.a[i1] == 0):
-                        self.SP_instance.x[i1, k, t].fix(1)
-                        fixed += 1
-                    if(round(self.MP_instance.x[i1, k, t].value) == 0):
-                        self.SP_instance.x[i1, k, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_SP_x_delay_variables(self):
-        print("Fixing x_d variables for phase two...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1 and self.SP_instance.a[i1] == 0):
-                        #self.SP_instance.x_d[i1, k, t].fix(1)
-                        fixed += 1
-                    if(round(self.MP_instance.x_d[i1, k, t].value) == 0):
-                        #self.SP_instance.x_d[i1, k, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " x_d variables fixed.")
-
-
-class FastCompleteLagrangeanHeuristicPlanner(FastCompleteHeuristicPlanner):
-
-    @staticmethod
-    def objective_function_MP(model):
-        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t) + 1 / (sum(model.An[alpha, t] for alpha in model.alpha for t in model.t) + sum(model.p[i] for i in model.i)) * sum(model.An[alpha, t] - sum(model.beta[alpha, i, t] * model.p[i] for i in model.t) for alpha in model.alpha for t in model.t)
-
-    def define_objective_MP(self, model):
-        model.objective = pyo.Objective(
-            rule=self.objective_function_MP,
-            sense=pyo.maximize)
-
-    def define_model(self):
-        self.define_MP()
-        self.define_SP()
-
-        self.define_objective_MP(self.MP_model)
-        self.define_objective(self.SP_model)
-
-
-class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
-
     @staticmethod
     def lambda_rule(model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
@@ -913,143 +787,46 @@ class SlowCompleteHeuristicPlanner(TwoPhaseHeuristicPlanner):
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
 
-    def fix_SP_x_delay_variables(self):
-        print("Fixing x_d variables for phase two...")
+    def fix_SP_delta_variables(self):
+        print("Fixing delta variables for phase two...")
+        fixed = 0
+        for q in self.MP_instance.q:
+            for k in self.MP_instance.k:
+                for t in self.MP_instance.t:
+                    for i in self.MP_instance.i:
+                        if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                            self.SP_instance.delta[q, i, k, t].fix(0)
+                            fixed += 1
+        print(str(fixed) + " delta variables fixed.")
+
+    def fix_MP_delta_variables(self):
+        print("Fixing delta variables for phase one...")
+        fixed = 0
+        for q in self.MP_instance.q:
+            for k in self.MP_instance.k:
+                for t in self.MP_instance.t:
+                    for i in self.MP_instance.i:
+                        if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                            self.MP_instance.delta[q, i, k, t].fix(0)
+                            fixed += 1
+        print(str(fixed) + " delta variables fixed.")
+
+    def fix_MP_x_variables(self):
+        print("Fixing delta variables for phase one...")
         fixed = 0
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
-                        self.SP_instance.x_d[i, k, t].fix(0)
+                    if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                        self.MP_instance.x[i, k, t].fix(0)
                         fixed += 1
-        print(str(fixed) + " x_d variables fixed.")
+        print(str(fixed) + " delta variables fixed.")
 
 
-class SlowCompleteLagrangeanHeuristicPlanner(SlowCompleteHeuristicPlanner):
-
-    @staticmethod
-    def objective_function_MP(model):
-        return sum(model.r[i] * model.x[i, k, t] for i in model.i for k in model.k for t in model.t) + 1 / (sum(model.An[alpha, t] for alpha in model.alpha for t in model.t) + sum(model.p[i] for i in model.i)) * sum(model.An[alpha, t] - sum(model.beta[alpha, i, t] * model.p[i] for i in model.t) for alpha in model.alpha for t in model.t)
-
-    def define_objective_MP(self, model):
-        model.objective = pyo.Objective(
-            rule=self.objective_function_MP,
-            sense=pyo.maximize)
-
-    def define_model(self):
-        self.define_MP()
-        self.define_SP()
-
-        self.define_objective_MP(self.MP_model)
-        self.define_objective(self.SP_model)
 
 
-class LBBDPlanner(TwoPhasePlanner):
 
-    def __init__(self, timeLimit, gap, iterations_cap, solver):
-        super().__init__(timeLimit, gap, solver)
-        self.iterations_cap = iterations_cap
-        self.fail = False
 
-    # patients with same anesthetist on same day but different room cannot overlap
-    @staticmethod
-    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0
-           or (model.x_param[i1, k1, t] + model.x_param[i2, k2, t] < 2)):
-            return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
-
-    # precedence across rooms
-    @staticmethod
-    def lambda_rule(model, i1, i2, t):
-        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
-            return pyo.Constraint.Skip
-        i1_all_day = 0
-        i2_all_day = 0
-        for k in model.k:
-            # if i1, i2 happen to be assigned to same room k on day t, then no need to use constraint
-            if(model.x_param[i1, k, t] + model.x_param[i2, k, t] == 2):
-                return pyo.Constraint.Skip
-            i1_all_day += model.x_param[i1, k, t]
-            i2_all_day += model.x_param[i2, k, t]
-        if(i1_all_day == 0 or i2_all_day == 0):
-            return pyo.Constraint.Skip
-        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
-
-    # ensure gamma plus operation time does not exceed end of day
-    @staticmethod
-    def end_of_day_rule(model, i, k, t):
-        if(model.find_component('x_param') and model.x_param[i, k, t] == 0
-           or (model.specialty[i] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
-
-    # ensure that patient i1 terminates operation before i2, if y_12kt = 1
-    @staticmethod
-    def time_ordering_precedence_rule(model, i1, i2, k, t):
-        if(i1 == i2 or (model.find_component('x_param') and model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
-
-    @staticmethod
-    def start_time_ordering_priority_rule(model, i1, i2, k, t):
-        if(i1 == i2 or model.u[i1, i2] == 0 or (model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
-
-    # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
-    @staticmethod
-    def exclusive_precedence_rule(model, i1, i2, k, t):
-        if(i1 >= i2 or (model.find_component('x_param') and model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2)
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            return pyo.Constraint.Skip
-        return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
-
-    def fix_SP_x_variables(self):
-        print("Fixing x variables for SP...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x[i1, k, t].value) == 1):
-                        self.SP_instance.x[i1, k, t].fix(1)
-                    else:
-                        self.SP_instance.x[i1, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_SP_x_delay_variables(self):
-        print("Fixing x_d variables for SP...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i1 in self.MP_instance.i:
-                    if(round(self.MP_instance.x_d[i1, k, t].value) == 1):
-                        self.SP_instance.x_d[i1, k, t].fix(1)
-                    else:
-                        self.SP_instance.x_d[i1, k, t].fix(0)
-                    fixed += 1
-        print(str(fixed) + " x_d variables fixed.")
-
-    def extend_data(self, data):
-        dict = {}
-        for i in range(1, self.MP_instance.I + 1):
-            for k in range(1, self.MP_instance.K + 1):
-                for t in range(1, self.MP_instance.T + 1):
-                    if(round(self.MP_instance.x[i, k, t].value) == 1):
-                        dict[(i, k, t)] = 1
-                    else:
-                        dict[(i, k, t)] = 0
-        data[None]['x_param'] = dict
 
     def is_infeasible(self, model):
         return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
@@ -1063,9 +840,12 @@ class LBBDPlanner(TwoPhasePlanner):
 
     def solve_MP(self):
         super().solve_MP()
-        self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-            self.solver._last_solve_time
-        self.fail = self.solver.options[self.timeLimit] <= 0
+        residual_time = self.solver.options[self.timeLimit] - self.solver._last_solve_time
+        if residual_time <= 0:
+            self.last_SP_round = True
+            self.solver.options[self.timeLimit] = 10
+        else:
+            self.solver.options[self.timeLimit] = residual_time
 
     def solve_SP(self):
         super().solve_SP()
@@ -1088,32 +868,71 @@ class LBBDPlanner(TwoPhasePlanner):
                 "fail": self.fail
                 }
 
+    def is_optimal(self):
+        return isclose(pyo.value(self.MP_instance.objective), pyo.value(self.SP_instance.objective))
+
+    @staticmethod
+    def MP_anesthetist_time_rule(model, t):
+        return sum(model.a[i] * model.p[i] * model.x[i, k, t] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) for i in model.i for k in model.k) - sum(model.An[alpha, t] for alpha in model.alpha) <= 0
+
+    def define_MP_anesthetist_time_constraint(self, model):
+        model.MP_anesthetist_time_constraint = pyo.Constraint(
+            model.t,
+            rule=self.MP_anesthetist_time_rule)
+
+    def define_MP(self):
+        self.define_sets(self.MP_model)
+        self.define_parameters(self.MP_model)
+        self.define_x_variables(self.MP_model)
+        self.define_delta_variables(self.MP_model)
+        self.define_single_delay_constraints(self.MP_model)
+        self.define_robustness_constraints(self.MP_model)
+        self.define_delay_implication_constraint(self.MP_model)
+        self.define_single_surgery_constraints(self.MP_model)
+        self.define_surgery_time_constraints(self.MP_model)
+        self.define_specialty_assignment_constraints(self.MP_model)
+        self.define_anesthetists_number_param(self.MP_model)
+        self.define_anesthetists_range_set(self.MP_model)
+        # self.define_beta_variables(self.MP_model)
+        self.define_anesthetists_availability(self.MP_model)
+        # self.define_anesthetist_assignment_constraint(self.MP_model)
+        # self.define_z_variables(self.MP_model)
+        # self.define_z_constraints(self.MP_model)
+        self.define_MP_anesthetist_time_constraint(self.MP_model)
+
+    def add_objective_cut(self):
+        N = 1 / (sum(self.MP_instance.r[i] for i in self.MP_instance.i))
+        R = sum(self.MP_instance.x[i, k, t] * self.MP_instance.r[i] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t)
+        cut = sum(self.MP_instance.d[q, i] * self.MP_instance.delta[q, i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t for q in self.MP_instance.q) * 667 + 10000 * N * R <= pyo.value(self.MP_instance.objective)
+        self.MP_instance.objective_function_cuts.add(cut)
+
     def solve_model(self, data):
         self.define_model()
         self.reset_run_info()
         self.create_MP_instance(data)
-        self.MP_instance.cuts = pyo.ConstraintList()
+        self.MP_instance.patients_cuts = pyo.ConstraintList()
+        self.MP_instance.objective_function_cuts = pyo.ConstraintList()
 
         self.iterations = 0
         self.fail = False
+        self.last_SP_round = False
         while self.iterations < self.iterations_cap:
             self.iterations += 1
             # MP
+            self.fix_MP_delta_variables()
             self.solve_MP()
-
-            if self.fail:
-                break
 
             # SP
             self.create_SP_instance(data)
             self.fix_SP_x_variables()
-            self.fix_SP_x_delay_variables()
             self.solve_SP()
 
-            # no solution found, but solver status is fine: need to add a cut
-            if self.is_infeasible(self.SP_model):
-                self.MP_instance.cuts.add(sum(
+            if not self.is_optimal() and not self.last_SP_round:
+                self.MP_instance.patients_cuts.add(sum(
                     1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
+                # self.MP_instance.objective_function_cuts.add(
+                #     sum(self.MP_instance.r[i] * self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t) <= pyo.value(self.MP_instance.objective))
+                self.add_objective_cut()
             else:
                 break
 
