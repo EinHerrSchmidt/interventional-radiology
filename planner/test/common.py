@@ -3,19 +3,14 @@ from data_maker import DataDescriptor, DataMaker
 
 
 def build_data_dictionary():
-    dataDescriptor = DataDescriptor()
-    dataDescriptor.patients = 60
-    dataDescriptor.days = 5
-    dataDescriptor.anesthetists = 2
-    dataDescriptor.covidFrequence = 0.5
-    dataDescriptor.anesthesiaFrequence = 0.2
-    dataDescriptor.specialtyBalance = 0.17
-    dataDescriptor.operatingDayDuration = 270
-    dataDescriptor.anesthesiaTime = 270
-    dataDescriptor.delayWeight = 0.75
+    data_descriptor = DataDescriptor(patients = 60,
+                                    days = 5,
+                                    anesthetists = 2,
+                                    infection_frequency = 0.5,
+                                    anesthesia_frequency = 0.2)
 
-    dataMaker = DataMaker(seed=52876)
-    return dataMaker.create_data_dictionary(dataDescriptor)
+    dataMaker = DataMaker(seed=52876, data_descriptor=data_descriptor)
+    return dataMaker.create_data_dictionary()
 
 
 class TestCommon(unittest.TestCase):

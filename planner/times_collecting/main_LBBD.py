@@ -1,7 +1,7 @@
 import logging
 import sys
 import time
-from planner import LBBDPlanner, ThreePhaseLBBDPlanner
+from planner import LBBDPlanner
 from planner.utils import SolutionVisualizer
 from planner.data_maker import DataDescriptor, DataMaker
 
@@ -14,10 +14,7 @@ covid = [0.2, 0.5, 0.8]
 anesthesia = [0.2, 0.5, 0.8]
 anesthetists = [1, 2]
 
-if(variant):
-    logging.basicConfig(filename='./planner/times_collecting/times/3Phase_LBBD_times.log', encoding='utf-8', level=logging.INFO)
-else:
-    logging.basicConfig(filename='./planner/times_collecting/times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
+logging.basicConfig(filename='./planner/times_collecting/times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
 logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tcumulated_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tIterations\tFailed\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
 for solver in solvers:
@@ -26,25 +23,17 @@ for solver in solvers:
             for a in anesthesia:
                 for at in anesthetists:
 
-                    planner = None
-                    if(variant):
-                        planner = ThreePhaseLBBDPlanner(timeLimit=600, gap = 0.0, iterations_cap=maxIterations, solver=solver)
-                    else:
-                        planner = LBBDPlanner(timeLimit=600, gap = 0.0, iterations_cap=maxIterations, solver=solver)
+                    planner = LBBDPlanner(timeLimit=590, gap = 0.0, iterations_cap=maxIterations, solver=solver)
 
-                    dataDescriptor = DataDescriptor()
+                    data_descriptor = DataDescriptor(patients=s,
+                                                     days=5,
+                                                     anesthetists=at,
+                                                     infection_frequency=c,
+                                                     anesthesia_frequency=a,
+                                                     specialty_frequency=[0.83, 0.17])
 
-                    dataDescriptor.patients = s
-                    dataDescriptor.days = 5
-                    dataDescriptor.anesthetists = at
-                    dataDescriptor.covidFrequence = c
-                    dataDescriptor.anesthesiaFrequence = a
-                    dataDescriptor.specialtyBalance = 0.17
-                    dataDescriptor.operatingDayDuration = 270
-                    dataDescriptor.anesthesiaTime = 270
-
-                    dataMaker = DataMaker(seed=52876)
-                    dataDictionary = dataMaker.create_data_dictionary(dataDescriptor)
+                    dataMaker = DataMaker(seed=52876, data_descriptor=data_descriptor)
+                    dataDictionary = dataMaker.create_data_dictionary()
                     t = time.time()
                     dataMaker.print_data(dataDictionary)
                     planner.solve_model(dataDictionary)
@@ -76,5 +65,5 @@ for solver in solvers:
                                     + str(usageInfo["Specialty2SelectedRatio"])
                                     )
 
-                    # sv.print_solution(solution)
-                    # sv.plot_graph(solution)
+                    sv.print_solution(solution)
+                    sv.plot_graph(solution)

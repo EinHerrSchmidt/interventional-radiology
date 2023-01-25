@@ -3,8 +3,6 @@ import plotly.express as px
 import pandas as pd
 import datetime
 
-from pyparsing import PrecededBy
-
 from planner.model import Patient
 
 class SolutionVisualizer:
@@ -240,7 +238,7 @@ class SolutionVisualizer:
                                             specialty=dataDictionary[None]["specialty"][i],
                                             day=0,
                                             operatingTime=dataDictionary[None]["p"][i],
-                                            arrival_delay=dataDictionary[None]["d"][i],
+                                            arrival_delay=dataDictionary[None]["d"][(1, i)],
                                             covid=dataDictionary[None]["c"][i],
                                             precedence=dataDictionary[None]["precedence"][i],
                                             delayWeight=None,
