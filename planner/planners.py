@@ -1,11 +1,7 @@
 from __future__ import division
-import logging
 import re
 import time
 import pyomo.environ as pyo
-import plotly.express as px
-import pandas as pd
-import datetime
 from pyomo.opt import SolverStatus, TerminationCondition
 from math import isclose
 
@@ -26,6 +22,7 @@ class Planner(ABC):
             self.timeLimit = 'timelimit'
             self.gap = 'mipgap'
             self.solver.options['emphasis'] = "mip 2"
+            # self.solver.options['threads'] = 2
         if(solver == "gurobi"):
             self.timeLimit = 'timelimit'
             self.gap = 'mipgap'
@@ -152,7 +149,7 @@ class Planner(ABC):
     def objective_function(model):
         N = 1 / (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
-        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) * 667 + 10000 * N * R
+        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) + N * R
 
     # constraints
     def define_single_surgery_constraints(self, model):
@@ -360,6 +357,9 @@ class Planner(ABC):
         model.precedence = pyo.Param(model.i)
         model.Gamma = pyo.Param(model.q, model.k, model.t)
 
+    def extract_solution(self):
+        return self.solution.to_patients_dict()
+
 
 class SimplePlanner(Planner):
 
@@ -468,36 +468,6 @@ class SimplePlanner(Planner):
                             fixed += 2
         print(str(fixed) + " y variables fixed.")
 
-    def extract_solution(self):
-        dict = {}
-        for k in self.model_instance.k:
-            for t in self.model_instance.t:
-                patients = []
-                for i in self.model_instance.i:
-                    if(round(self.model_instance.x[i, k, t].value) == 1):
-                        p = self.model_instance.p[i]
-                        if(sum(round(self.model_instance.delta[q, i, k, t].value) for q in self.model_instance.q) == 1):
-                            d = True
-                            arrival_delay = self.model_instance.d[1, i]
-                        else:
-                            d = False
-                            arrival_delay = 0
-                        c = self.model_instance.c[i]
-                        a = self.model_instance.a[i]
-                        anesthetist = 0
-                        for alpha in self.model_instance.alpha:
-                            if(round(self.model_instance.beta[alpha, i, t].value) == 1):
-                                anesthetist = alpha
-                        order = round(self.model_instance.gamma[i].value)
-                        specialty = self.model_instance.specialty[i]
-                        priority = self.model_instance.r[i]
-                        precedence = self.model_instance.precedence[i]
-                        patients.append(Patient(
-                            i, priority, k, specialty, t, p, arrival_delay, c, precedence, None, a, anesthetist, order, d))
-                patients.sort(key=lambda x: x.order)
-                dict[(k, t)] = patients
-        return dict
-
     def extract_run_info(self):
         return {"cumulated_building_time": self.cumulated_building_time,
                 "solver_time": self.solver_time,
@@ -517,14 +487,13 @@ class SimplePlanner(Planner):
         print("\nModel instance solved.")
         self.solver_time = self.solver._last_solve_time
         resultsAsString = str(self.model.results)
-        self.upper_bound = float(
-            re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
-        self.gap = round(
-            (1 - pyo.value(self.model_instance.objective) / self.upper_bound) * 100, 2)
+        self.upper_bound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
+        self.gap = round((1 - pyo.value(self.model_instance.objective) / self.upper_bound) * 100, 2)
 
-        self.time_limit_hit = self.model.results.solver.termination_condition in [
-            TerminationCondition.maxTimeLimit]
+        self.time_limit_hit = self.model.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
         self.status_ok = self.model.results.solver.status == SolverStatus.ok
+
+        self.solution = Solution(self.model_instance)
 
 
 class TwoPhasePlanner(Planner):
@@ -623,50 +592,16 @@ class TwoPhasePlanner(Planner):
         print("SP instance created in " + str(round(elapsed, 2)) + "s")
         self.cumulated_building_time += elapsed
 
-    def extract_solution(self):
-        if(self.SP_model.results.solver.status != SolverStatus.ok):
-            return None
-        dict = {}
-        for k in self.SP_instance.k:
-            for t in self.SP_instance.t:
-                patients = []
-                for i in self.SP_instance.i:
-                    if(round(self.SP_instance.x[i, k, t].value) == 1):
-                        p = self.SP_instance.p[i]
-                        if(sum(round(self.SP_instance.delta[q, i, k, t].value) for q in self.SP_instance.q) == 1):
-                            d = True
-                            arrival_delay = self.SP_instance.d[1, i]
-                        else:
-                            d = False
-                            arrival_delay = 0
-                        c = self.SP_instance.c[i]
-                        a = self.SP_instance.a[i]
-                        anesthetist = 0
-                        for alpha in self.SP_instance.alpha:
-                            if(round(self.SP_instance.beta[alpha, i, t].value) == 1):
-                                anesthetist = alpha
-                        order = round(self.SP_instance.gamma[i].value, 2)
-                        specialty = self.SP_instance.specialty[i]
-                        priority = self.SP_instance.r[i]
-                        precedence = self.SP_instance.precedence[i]
-                        patients.append(Patient(
-                            i, priority, k, specialty, t, p, arrival_delay, c, precedence, None, a, anesthetist, order, d))
-                patients.sort(key=lambda x: x.order)
-                dict[(k, t)] = patients
-        return dict
-
     def solve_MP(self):
         print("Solving MP instance...")
         self.MP_model.results = self.solver.solve(self.MP_instance, tee=True)
         print("\nMP instance solved.")
         self.solver_time += self.solver._last_solve_time
-        self.MP_time_limit_hit = self.MP_model.results.solver.termination_condition in [
-            TerminationCondition.maxTimeLimit]
+        self.MP_time_limit_hit = self.MP_model.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
         self.MP_objective_function_value = pyo.value(self.MP_instance.objective)
 
         resultsAsString = str(self.MP_model.results)
-        self.MP_upper_bound = float(
-            re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
+        self.MP_upper_bound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
 
     def solve_SP(self):
         print("Solving SP instance...")
@@ -812,7 +747,7 @@ class LBBDPlanner(TwoPhasePlanner):
         print(str(fixed) + " delta variables fixed.")
 
     def fix_MP_x_variables(self):
-        print("Fixing delta variables for phase one...")
+        print("Fixing x variables for phase one...")
         fixed = 0
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
@@ -820,23 +755,10 @@ class LBBDPlanner(TwoPhasePlanner):
                     if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
                         self.MP_instance.x[i, k, t].fix(0)
                         fixed += 1
-        print(str(fixed) + " delta variables fixed.")
-
-
-
-
-
-
+        print(str(fixed) + " x variables fixed.")
 
     def is_infeasible(self, model):
         return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
-
-    def extract_objective_value(self):
-        objective_value = None
-        if not self.fail and self.status_ok:
-            if self.status_ok:
-                objective_value = pyo.value(self.SP_instance.objective)
-        return objective_value
 
     def solve_MP(self):
         super().solve_MP()
@@ -873,7 +795,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
     @staticmethod
     def MP_anesthetist_time_rule(model, t):
-        return sum(model.a[i] * model.p[i] * model.x[i, k, t] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) for i in model.i for k in model.k) - sum(model.An[alpha, t] for alpha in model.alpha) <= 0
+        return sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) + sum(model.a[i] * model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for q in model.q) <= sum(model.An[alpha, t] for alpha in model.alpha)
 
     def define_MP_anesthetist_time_constraint(self, model):
         model.MP_anesthetist_time_constraint = pyo.Constraint(
@@ -901,10 +823,18 @@ class LBBDPlanner(TwoPhasePlanner):
         self.define_MP_anesthetist_time_constraint(self.MP_model)
 
     def add_objective_cut(self):
+        self.MP_instance.objective_function_cuts.clear()
+
         N = 1 / (sum(self.MP_instance.r[i] for i in self.MP_instance.i))
         R = sum(self.MP_instance.x[i, k, t] * self.MP_instance.r[i] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t)
-        cut = sum(self.MP_instance.d[q, i] * self.MP_instance.delta[q, i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t for q in self.MP_instance.q) * 667 + 10000 * N * R <= pyo.value(self.MP_instance.objective)
+        cut = sum(self.MP_instance.d[q, i] * self.MP_instance.delta[q, i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t for q in self.MP_instance.q) + N * R <= self.MP_upper_bound
         self.MP_instance.objective_function_cuts.add(cut)
+
+    def add_patients_cut(self):
+        self.MP_instance.patients_cuts.add(sum(
+            1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
+
+        self.MP_instance.patients_cuts.display()
 
     def solve_model(self, data):
         self.define_model()
@@ -912,14 +842,15 @@ class LBBDPlanner(TwoPhasePlanner):
         self.create_MP_instance(data)
         self.MP_instance.patients_cuts = pyo.ConstraintList()
         self.MP_instance.objective_function_cuts = pyo.ConstraintList()
+        self.selected_x_indices = set()
 
         self.iterations = 0
         self.fail = False
         self.last_SP_round = False
+        self.best_SP_solution_value = 0
         while self.iterations < self.iterations_cap:
             self.iterations += 1
             # MP
-            self.fix_MP_delta_variables()
             self.solve_MP()
 
             # SP
@@ -927,14 +858,87 @@ class LBBDPlanner(TwoPhasePlanner):
             self.fix_SP_x_variables()
             self.solve_SP()
 
+            # save best solution so far
+            SP_objective_value = pyo.value(self.SP_instance.objective)
+            if SP_objective_value > self.best_SP_solution_value:
+                self.best_SP_solution_value = SP_objective_value
+                self.solution = Solution(self.SP_instance)
+
             if not self.is_optimal() and not self.last_SP_round:
-                self.MP_instance.patients_cuts.add(sum(
-                    1 - self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t if round(self.MP_instance.x[i, k, t].value) == 1) >= 1)
-                # self.MP_instance.objective_function_cuts.add(
-                #     sum(self.MP_instance.r[i] * self.MP_instance.x[i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t) <= pyo.value(self.MP_instance.objective))
+                self.add_patients_cut()
                 self.add_objective_cut()
             else:
                 break
 
         self.status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
-        self.objective_function_value = self.extract_objective_value()
+
+        # here we have the objective function value for the best SP solution encountered
+        self.objective_function_value = self.solution.objective_value
+
+        denominator = self.MP_objective_function_value
+        # if we hit the time limit during the MP resolution, then we have to compute gap with respect to its best known bound
+        if self.MP_time_limit_hit:
+            denominator = self.MP_upper_bound
+        self.gap = round((1 - self.objective_function_value / denominator) * 100, 2)
+
+class Solution:
+
+    def __init__(self, model_instance=None):
+        if model_instance:
+            self.extract_solution(model_instance)
+
+    def extract_solution(self, model_instance):
+        self.I = model_instance.I
+        self.K = model_instance.K
+        self.T = model_instance.T
+        self.A = model_instance.A
+        self.Q = model_instance.Q
+
+        # x, beta and delta: discard variables set to 0
+        self.x = {key: value for key, value in model_instance.x.extract_values().items() if round(value) != 0}
+        self.beta = {key: value for key, value in model_instance.beta.extract_values().items() if round(value) != 0}
+        self.gamma = model_instance.gamma.extract_values()
+        self.delta = {key: value for key, value in model_instance.delta.extract_values().items() if round(value) != 0}
+
+        # parameters
+        self.d = model_instance.d.extract_values()
+        self.c = model_instance.c.extract_values()
+        self.a = model_instance.a.extract_values()
+        self.specialty = model_instance.specialty.extract_values()
+        self.r = model_instance.r.extract_values()
+        self.p = model_instance.p.extract_values()
+        self.precedence = model_instance.precedence.extract_values()
+
+        self.objective_value = pyo.value(model_instance.objective)
+
+    def to_patients_dict(self):
+        patients_dict = {(k, t): [] for k in range(1, self.K + 1) for t in range(1, self.T + 1)}
+        for (i, k, t) in self.x:
+            delay = False
+            arrival_delay = 0
+            for q in range(1, self.Q + 1):
+                if (q, i, k, t) in self.delta:
+                    delay = True
+                    arrival_delay = self.d[(q, i)]
+                    break
+            anesthetist = 0
+            for alpha in range(1, self.A + 1):
+                if (alpha, i, t) in self.beta:
+                    anesthetist = alpha
+                    break
+            patients_dict[(k, t)].append(Patient(id=i, 
+                                                 priority=self.r[i],
+                                                 room=k,
+                                                 specialty=self.specialty[i],
+                                                 day=t,
+                                                 operatingTime=self.p[i],
+                                                 arrival_delay=arrival_delay,
+                                                 covid=self.c[i], 
+                                                 precedence=self.precedence[i], 
+                                                 delayWeight=None, 
+                                                 anesthesia=self.a[i], 
+                                                 anesthetist=anesthetist, 
+                                                 order=round(self.gamma[i], 2),
+                                                 delay=delay)
+                                        )
+        return patients_dict
