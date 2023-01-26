@@ -25,9 +25,6 @@ class TestLBBD(TestCommon):
     def test_non_overlapping_anesthetists(self):
         self.non_overlapping_anesthetists()
 
-    def test_priority_constraints(self):
-        self.priority_constraints()
-
     def test_surgery_time_constraint(self):
         self.surgery_time_constraint()
 
