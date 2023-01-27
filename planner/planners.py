@@ -1,4 +1,5 @@
 from __future__ import division
+from enum import Enum
 import re
 import time
 import pyomo.environ as pyo
@@ -358,7 +359,53 @@ class Planner(ABC):
         model.Gamma = pyo.Param(model.q, model.k, model.t)
 
     def extract_solution(self):
-        return self.solution.to_patients_dict()
+        if self.solution:
+            return self.solution.to_patients_dict()
+
+        return None
+
+    def compute_specialty_selection_ratio(self):
+        specialty_selection_ratio = None
+        if self.solution:
+            specialty_selection_ratio = {j: 0 for j in range(1, self.solution.J + 1)}
+            for j in range(1, self.solution.J + 1):
+                specialty_j_selected_patients = 0
+                specialty_j_total_patients = 0
+                for (i, _, _) in self.solution.x:
+                    if self.solution.specialty[i] == j:
+                        specialty_j_selected_patients += 1
+                for i in range(1, self.solution.I + 1):
+                    if self.solution.specialty[i] == j:
+                        specialty_j_total_patients += 1
+                specialty_selection_ratio[j] = specialty_j_selected_patients / specialty_j_total_patients
+
+        return specialty_selection_ratio
+    
+    def compute_operating_room_utilization_by_specialty(self):
+        operating_room_utilization = self.compute_operating_room_utilization()
+        OR_utilization_by_specialty = None
+        if operating_room_utilization:
+            OR_utilization_by_specialty = {j: 0 for j in range(1, self.solution.J + 1)}
+            for j in range(1, self.solution.J + 1):
+                specialty_j_ORs = 0
+                cumulated_utilization = 0
+                for (k, t) in operating_room_utilization.keys():
+                    if self.solution.tau[(j, k, t)] == 1:
+                        specialty_j_ORs += 1
+                        cumulated_utilization += operating_room_utilization[(k, t)]
+                OR_utilization_by_specialty[j] = cumulated_utilization / specialty_j_ORs
+
+        return OR_utilization_by_specialty
+            
+    def compute_operating_room_utilization(self):
+        room_utilization = None
+        if self.solution:
+            room_utilization = {(k, t): 0 for (_, k, t) in self.solution.x}
+            for (i, k, t) in self.solution.x:
+                room_utilization[(k, t)] += self.solution.p[i] + sum(self.solution.d[q, i] for (q, i1, _, _) in self.solution.delta if i == i1)
+            for (k, t) in room_utilization.keys():
+                room_utilization[(k, t)] = room_utilization[(k, t)] / self.solution.s[(k, t)]
+        return room_utilization
 
 
 class SimplePlanner(Planner):
@@ -711,28 +758,24 @@ class LBBDPlanner(TwoPhasePlanner):
         data[None]['x_param'] = x_param_dict
         data[None]['status'] = status_dict
 
-    def fix_SP_x_variables(self):
+    def fix_SP_variables(self, rule):
         print("Fixing x variables for phase two...")
         fixed = 0
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
-                        self.SP_instance.x[i, k, t].fix(0)
+                    if rule == VariablesFixingRule.GUARANTEED_FEASIBILITY:
+                        if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                            self.SP_instance.x[i, k, t].fix(0)
+                            for q in self.SP_instance.q:
+                                self.SP_instance.delta[q, i, k, t].fix(0)
+                            fixed += 1
+                    if rule == VariablesFixingRule.FIX_ALL:
+                        self.SP_instance.x[i, k, t].fix(round(self.MP_instance.x[i, k, t].value))
+                        for q in self.SP_instance.q:
+                            self.SP_instance.delta[q, i, k, t].fix(round(self.MP_instance.delta[q, i, k, t].value))
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
-
-    def fix_SP_delta_variables(self):
-        print("Fixing delta variables for phase two...")
-        fixed = 0
-        for q in self.MP_instance.q:
-            for k in self.MP_instance.k:
-                for t in self.MP_instance.t:
-                    for i in self.MP_instance.i:
-                        if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
-                            self.SP_instance.delta[q, i, k, t].fix(0)
-                            fixed += 1
-        print(str(fixed) + " delta variables fixed.")
 
     def fix_MP_delta_variables(self):
         print("Fixing delta variables for phase one...")
@@ -757,14 +800,17 @@ class LBBDPlanner(TwoPhasePlanner):
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
 
-    def is_infeasible(self, model):
-        return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
+    def has_solution(self):
+        # return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
+        return self.SP_model.results.solver.termination_condition in {TerminationCondition.feasible,
+                                                                      TerminationCondition.optimal
+                                                                     }
 
     def solve_MP(self):
         super().solve_MP()
         residual_time = self.solver.options[self.timeLimit] - self.solver._last_solve_time
         if residual_time <= 0:
-            self.last_SP_round = True
+            self.last_round = True
             self.solver.options[self.timeLimit] = 10
         else:
             self.solver.options[self.timeLimit] = residual_time
@@ -775,6 +821,21 @@ class LBBDPlanner(TwoPhasePlanner):
             self.solver._last_solve_time
 
     def extract_run_info(self):
+        OR_utilization_by_specialty = self.compute_operating_room_utilization_by_specialty()
+        specialty_selection_ratio = self.compute_specialty_selection_ratio()
+
+        specialty_1_OR_utilization = None
+        specialty_2_OR_utilization = None
+        specialty_1_selection_ratio = None
+        specialty_2_selection_ratio = None
+
+        if OR_utilization_by_specialty:
+            specialty_1_OR_utilization = OR_utilization_by_specialty[1]
+            specialty_2_OR_utilization = OR_utilization_by_specialty[2]
+        if specialty_selection_ratio:
+            specialty_1_selection_ratio = specialty_selection_ratio[1]
+            specialty_2_selection_ratio = specialty_selection_ratio[2]
+
         return {"cumulated_building_time": self.cumulated_building_time,
                 "solver_time": self.solver_time,
                 "time_limit_hit": self.time_limit_hit,
@@ -787,7 +848,11 @@ class LBBDPlanner(TwoPhasePlanner):
                 "MP_time_limit_hit": self.MP_time_limit_hit,
                 "time_limit_hit": self.time_limit_hit,
                 "iterations": self.iterations,
-                "fail": self.fail
+                "fail": self.fail,
+                "specialty_1_OR_utilization": specialty_1_OR_utilization,
+                "specialty_2_OR_utilization": specialty_2_OR_utilization,
+                "specialty_1_selection_ratio": specialty_1_selection_ratio,
+                "specialty_2_selection_ratio": specialty_2_selection_ratio
                 }
 
     def is_optimal(self):
@@ -836,6 +901,12 @@ class LBBDPlanner(TwoPhasePlanner):
 
         self.MP_instance.patients_cuts.display()
 
+    def save_best_solution(self):
+        SP_objective_value = pyo.value(self.SP_instance.objective)
+        if SP_objective_value > self.best_SP_solution_value:
+            self.best_SP_solution_value = SP_objective_value
+            self.solution = Solution(self.SP_instance)
+
     def solve_model(self, data):
         self.define_model()
         self.reset_run_info()
@@ -846,7 +917,8 @@ class LBBDPlanner(TwoPhasePlanner):
 
         self.iterations = 0
         self.fail = False
-        self.last_SP_round = False
+        self.last_round = False
+        self.solution = None
         self.best_SP_solution_value = 0
         while self.iterations < self.iterations_cap:
             self.iterations += 1
@@ -855,31 +927,43 @@ class LBBDPlanner(TwoPhasePlanner):
 
             # SP
             self.create_SP_instance(data)
-            self.fix_SP_x_variables()
+            self.fix_SP_variables(rule=VariablesFixingRule.GUARANTEED_FEASIBILITY)
             self.solve_SP()
 
-            # save best solution so far
-            SP_objective_value = pyo.value(self.SP_instance.objective)
-            if SP_objective_value > self.best_SP_solution_value:
-                self.best_SP_solution_value = SP_objective_value
-                self.solution = Solution(self.SP_instance)
+            if self.has_solution():
+                self.save_best_solution()
 
-            if not self.is_optimal() and not self.last_SP_round:
+            if (not self.has_solution() or not self.is_optimal()) and not self.last_round:
+                # depending on the variables' fixing rule, this cut assumes a different meaning
+                # guaranteed_feasibility -> optimality cut
+                # fix_all -> feasibility cut
                 self.add_patients_cut()
+                # this cut has no feasibility/optimality meaning: it simply helps in achieving faster computation times
                 self.add_objective_cut()
             else:
                 break
 
         self.status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
+        self.compute_gap_and_solution_value()
 
-        # here we have the objective function value for the best SP solution encountered
-        self.objective_function_value = self.solution.objective_value
+    def compute_gap_and_solution_value(self):
+        self.objective_function_value = None
+        self.gap = None
+
+        if self.solution:
+            self.objective_function_value = self.solution.objective_value
+        else:
+            return
 
         denominator = self.MP_objective_function_value
         # if we hit the time limit during the MP resolution, then we have to compute gap with respect to its best known bound
         if self.MP_time_limit_hit:
             denominator = self.MP_upper_bound
-        self.gap = round((1 - self.objective_function_value / denominator) * 100, 2)
+        self.gap = round((1 - self.objective_function_value / denominator) * 100, 6)
+
+class VariablesFixingRule(Enum):
+    GUARANTEED_FEASIBILITY = "guaranteed_feasibility",
+    FIX_ALL = "fix_all"
 
 class Solution:
 
@@ -889,6 +973,7 @@ class Solution:
 
     def extract_solution(self, model_instance):
         self.I = model_instance.I
+        self.J = model_instance.J
         self.K = model_instance.K
         self.T = model_instance.T
         self.A = model_instance.A
@@ -906,7 +991,9 @@ class Solution:
         self.a = model_instance.a.extract_values()
         self.specialty = model_instance.specialty.extract_values()
         self.r = model_instance.r.extract_values()
+        self.s = model_instance.s.extract_values()
         self.p = model_instance.p.extract_values()
+        self.tau = model_instance.tau.extract_values()
         self.precedence = model_instance.precedence.extract_values()
 
         self.objective_value = pyo.value(model_instance.objective)
