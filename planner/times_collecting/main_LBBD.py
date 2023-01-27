@@ -23,7 +23,7 @@ for solver in solvers:
             for a in anesthesia:
                 for at in anesthetists:
 
-                    planner = LBBDPlanner(timeLimit=590, gap = 0.0, iterations_cap=maxIterations, solver=solver)
+                    planner = LBBDPlanner(timeLimit=40, gap = 0.0, iterations_cap=maxIterations, solver=solver)
 
                     data_descriptor = DataDescriptor(patients=s,
                                                      days=5,
@@ -40,10 +40,11 @@ for solver in solvers:
                     run_info = planner.extract_run_info()
                     elapsed = (time.time() - t)
 
-                    if(run_info["fail"] == False):
-                        solution = planner.extract_solution()
+                    solution = planner.extract_solution()
+                    if solution:
                         sv = SolutionVisualizer()
-                        usageInfo = sv.compute_room_utilization(solution=solution, dataDictionary=dataDictionary)
+                        sv.print_solution(solution)
+                        sv.plot_graph(solution)
 
                     logging.info(solver + "\t"
                                     + str(s) + "\t"
@@ -60,11 +61,8 @@ for solver in solvers:
                                     + str(run_info["time_limit_hit"]) + "\t"
                                     + str(run_info["iterations"]) + "\t"
                                     + str(run_info["fail"]) + "\t"
-                                    + str(usageInfo["Specialty1ORUsage"]) + "\t"
-                                    + str(usageInfo["Specialty2ORUsage"]) + "\t"
-                                    + str(usageInfo["Specialty1SelectedRatio"]) + "\t"
-                                    + str(usageInfo["Specialty2SelectedRatio"])
+                                    + str(run_info["specialty_1_OR_utilization"]) + "\t"
+                                    + str(run_info["specialty_2_OR_utilization"]) + "\t"
+                                    + str(run_info["specialty_1_selection_ratio"]) + "\t"
+                                    + str(run_info["specialty_2_selection_ratio"])
                                     )
-
-                    sv.print_solution(solution)
-                    sv.plot_graph(solution)

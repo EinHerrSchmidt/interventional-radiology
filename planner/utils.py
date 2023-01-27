@@ -22,34 +22,6 @@ class SolutionVisualizer:
                     value = value + patient.priority
         return value
 
-    def print_patients_by_precedence(self, solution):
-        KT = max(solution.keys())
-        K = KT[0]
-        T = KT[1]
-
-        PO = 0
-        PR = 0
-        SO = 0
-        SR = 0
-        CO = 0
-        CR = 0
-        for t in range(1, T + 1):
-            for k in range(1, K + 1):
-                for patient in solution[(k, t)]:
-                    if(patient.precedence == 1):
-                        PO += 1
-                    elif(patient.precedence == 2):
-                        PR += 1
-                    elif(patient.precedence == 3):
-                        SO += 1
-                    elif(patient.precedence == 4):
-                        SR += 1
-                    elif(patient.precedence == 5):
-                        CO += 1
-                    elif(patient.precedence == 6):
-                        CR += 1
-        print("PO: " + str(PO) + "\n" + "PR " + str(PR) + "\n" + "SO: " + str(SO) + "\n" + "SR: " + str(SR) + "\n" + "CO: " + str(CO) + "\n" + "CR: " + str(CR) + "\n")
-
     def compute_solution_partitioning_by_precedence(self, solution):
         KT = max(solution.keys())
         K = KT[0]
@@ -222,63 +194,3 @@ class SolutionVisualizer:
         ))
         fig.update_yaxes(categoryorder='category descending')
         fig.show()
-
-    def compute_room_utilization(self, solution, dataDictionary):
-        if(solution is None):
-            return {"Specialty1ORUsage": -1,
-                "Specialty2ORUsage": -1,
-                "Specialty1SelectedRatio": -1,
-                "Specialty2SelectedRatio": -1
-            }
-        overallPatients = []
-        for i in range(1, dataDictionary[None]["I"][None] + 1):
-            overallPatients.append(Patient(id=i,
-                                            priority=dataDictionary[None]["r"][i],
-                                            room=0,
-                                            specialty=dataDictionary[None]["specialty"][i],
-                                            day=0,
-                                            operatingTime=dataDictionary[None]["p"][i],
-                                            arrival_delay=dataDictionary[None]["d"][(1, i)],
-                                            covid=dataDictionary[None]["c"][i],
-                                            precedence=dataDictionary[None]["precedence"][i],
-                                            delayWeight=None,
-                                            anesthesia=dataDictionary[None]["a"][i],
-                                            anesthetist=0,
-                                            order=0,
-                                            delay="N/A")
-                                    )
-
-        specialty1TotalPatients = sum(map(lambda _: 1, list(filter(lambda p: p.specialty == 1, overallPatients))))
-        specialty2TotalPatients = sum(map(lambda _: 1, list(filter(lambda p: p.specialty == 2, overallPatients))))
-
-        KT = max(solution.keys())
-        K = KT[0]
-        T = KT[1]
-        specialty1TotalTime = 0
-        specialty2TotalTime = 0
-
-        specialty1UsedTime = 0
-        specialty2UsedTime = 0
-
-        specialty1SelectedPatients = 0
-        specialty2SelectedPatients = 0
-
-        for t in range(1, T + 1):
-            for k in range(1, K + 1):
-                if(k == 1 or k == 2):
-                    specialty1TotalTime += dataDictionary[None]["s"][(k, t)]
-                else:
-                    specialty2TotalTime += dataDictionary[None]["s"][(k, t)]
-                for patient in solution[(k, t)]:
-                    if(patient.specialty == 1):
-                        specialty1UsedTime += patient.operatingTime
-                        specialty1SelectedPatients += 1
-                    else:
-                        specialty2UsedTime += patient.operatingTime
-                        specialty2SelectedPatients += 1
-
-        return {"Specialty1ORUsage": specialty1UsedTime / specialty1TotalTime,
-                "Specialty2ORUsage": specialty2UsedTime / specialty2TotalTime,
-                "Specialty1SelectedRatio": specialty1SelectedPatients / specialty1TotalPatients,
-                "Specialty2SelectedRatio": specialty2SelectedPatients / specialty2TotalPatients
-        }

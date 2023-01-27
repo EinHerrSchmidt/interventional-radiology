@@ -6,4 +6,4 @@ if __name__ == '__main__':
     # vanilla
     # os.system("python -m planner.times_collecting.main_vanilla")
     # LBBD
-    os.system("python -m planner.times_collecting.main_LBBD False 50")
+    os.system("python -m planner.times_collecting.main_LBBD False 10")
