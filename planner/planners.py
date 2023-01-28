@@ -4,7 +4,7 @@ import re
 import time
 import pyomo.environ as pyo
 from pyomo.opt import SolverStatus, TerminationCondition
-from math import isclose
+from math import isclose, inf
 
 from abc import ABC, abstractmethod
 
@@ -664,7 +664,6 @@ class LBBDPlanner(TwoPhasePlanner):
     def __init__(self, timeLimit, gap, iterations_cap, solver):
         super().__init__(timeLimit, gap, solver)
         self.iterations_cap = iterations_cap
-        self.fail = False
 
     @staticmethod
     def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
@@ -811,14 +810,17 @@ class LBBDPlanner(TwoPhasePlanner):
         residual_time = self.solver.options[self.timeLimit] - self.solver._last_solve_time
         if residual_time <= 0:
             self.last_round = True
-            self.solver.options[self.timeLimit] = 10
+            self.solver.options[self.timeLimit] = 10 # leave 10 seconds for solving the last SP
         else:
             self.solver.options[self.timeLimit] = residual_time
 
     def solve_SP(self):
         super().solve_SP()
-        self.solver.options[self.timeLimit] = self.solver.options[self.timeLimit] - \
-            self.solver._last_solve_time
+        residual_time = self.solver.options[self.timeLimit] - self.solver._last_solve_time
+        if residual_time <= 0:
+            self.last_round = True
+        else:
+            self.solver.options[self.timeLimit] = residual_time
 
     def extract_run_info(self):
         OR_utilization_by_specialty = self.compute_operating_room_utilization_by_specialty()
@@ -848,7 +850,6 @@ class LBBDPlanner(TwoPhasePlanner):
                 "MP_time_limit_hit": self.MP_time_limit_hit,
                 "time_limit_hit": self.time_limit_hit,
                 "iterations": self.iterations,
-                "fail": self.fail,
                 "specialty_1_OR_utilization": specialty_1_OR_utilization,
                 "specialty_2_OR_utilization": specialty_2_OR_utilization,
                 "specialty_1_selection_ratio": specialty_1_selection_ratio,
@@ -916,14 +917,17 @@ class LBBDPlanner(TwoPhasePlanner):
         self.selected_x_indices = set()
 
         self.iterations = 0
-        self.fail = False
         self.last_round = False
         self.solution = None
+        self.MP_least_upper_bound = inf
         self.best_SP_solution_value = 0
         while self.iterations < self.iterations_cap:
             self.iterations += 1
             # MP
             self.solve_MP()
+
+            if self.MP_upper_bound < self.MP_least_upper_bound:
+                self.MP_least_upper_bound = self.MP_upper_bound
 
             # SP
             self.create_SP_instance(data)
@@ -955,11 +959,7 @@ class LBBDPlanner(TwoPhasePlanner):
         else:
             return
 
-        denominator = self.MP_objective_function_value
-        # if we hit the time limit during the MP resolution, then we have to compute gap with respect to its best known bound
-        if self.MP_time_limit_hit:
-            denominator = self.MP_upper_bound
-        self.gap = round((1 - self.objective_function_value / denominator) * 100, 6)
+        self.gap = round((1 - self.objective_function_value / self.MP_least_upper_bound) * 100, 6)
 
 class VariablesFixingRule(Enum):
     GUARANTEED_FEASIBILITY = "guaranteed_feasibility",

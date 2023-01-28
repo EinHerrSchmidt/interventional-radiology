@@ -15,7 +15,7 @@ anesthesia = [0.2, 0.5, 0.8]
 anesthetists = [1, 2]
 
 logging.basicConfig(filename='./planner/times_collecting/times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
-logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tcumulated_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tGap\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tIterations\tFailed\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
+logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tcumulated_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tGap\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tIterations\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio")
 
 for solver in solvers:
     for s in size:
@@ -60,7 +60,6 @@ for solver in solvers:
                                     + str(run_info["MP_time_limit_hit"]) + "\t"
                                     + str(run_info["time_limit_hit"]) + "\t"
                                     + str(run_info["iterations"]) + "\t"
-                                    + str(run_info["fail"]) + "\t"
                                     + str(run_info["specialty_1_OR_utilization"]) + "\t"
                                     + str(run_info["specialty_2_OR_utilization"]) + "\t"
                                     + str(run_info["specialty_1_selection_ratio"]) + "\t"
