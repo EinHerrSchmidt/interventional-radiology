@@ -53,8 +53,8 @@ class Planner(ABC):
         self.time_limit_hit = False
         self.MP_upper_bound = 0
         self.upper_bound = 0
+        self.generated_constraints = 0
         self.discarded_constraints = 0
-        self.total_constraints = 0
 
 
     @abstractmethod
@@ -66,51 +66,51 @@ class Planner(ABC):
         pass
 
     def single_surgery_rule(self, model, i):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
     def single_delay_rule(self, model, i):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.delta[q, i, k, t] for k in model.k for t in model.t for q in model.q) <= 1
 
     def robustness_constraints_rule(self, model, q, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.delta[q, i, k, t] for i in model.i) <= model.Gamma[q, k, t]
 
     def delay_implication_constraint_rule(self, model, i, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.x[i, k, t] >= sum(model.delta[q, i, k, t] for q in model.q)
 
     def surgery_time_rule(self, model, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.p[i] * model.x[i, k, t] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) for i in model.i) <= model.s[k, t]
 
     def specialty_assignment_rule(self, model, j, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
     def anesthetist_assignment_rule(self, model, i, t):
         if(model.a[i] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
     def anesthetist_time_rule(self, model, alpha, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q) <= model.An[alpha, t]
 
     # needed for linearizing product of binary variables
     def z_rule_1(self, model, alpha, i, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) <= model.beta[alpha, i, t]
 
     def z_rule_2(self, model, alpha, i, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) <= sum(model.delta[q, i, k, t] for q in model.q)
 
     def z_rule_3(self, model, alpha, i, k, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) >= model.beta[alpha, i, t] + sum(model.delta[q, i, k, t] for q in model.q) - 1
 
     # patients with same anesthetist on same day but different room cannot overlap
@@ -151,51 +151,51 @@ class Planner(ABC):
     def define_single_surgery_constraints(self, model):
         model.single_surgery_constraint = pyo.Constraint(
             model.i,
-            rule=self.single_surgery_rule)
+            rule=lambda model, i: self.single_surgery_rule(model, i))
 
     def define_single_delay_constraints(self, model):
         model.single_surgery_delay_constraint = pyo.Constraint(
             model.i,
-            rule=self.single_delay_rule)
+            rule=lambda model, i: self.single_delay_rule(model, i))
 
     def define_robustness_constraints(self, model):
         model.robustness_constraint = pyo.Constraint(
             model.q,
             model.k,
             model.t,
-            rule=self.robustness_constraints_rule)
+            rule=lambda model, q, k, t: self.robustness_constraints_rule(model, q, k, t))
 
     def define_delay_implication_constraint(self, model):
         model.delay_implication_constraint = pyo.Constraint(
             model.i,
             model.k,
             model.t,
-            rule=self.delay_implication_constraint_rule)
+            rule=lambda model, i, k, t: self.delay_implication_constraint_rule(model, i, k, t))
 
     def define_surgery_time_constraints(self, model):
         model.surgery_time_constraint = pyo.Constraint(
             model.k,
             model.t,
-            rule=self.surgery_time_rule)
+            rule=lambda model, k, t: self.surgery_time_rule(model, k, t))
 
     def define_specialty_assignment_constraints(self, model):
         model.specialty_assignment_constraint = pyo.Constraint(
             model.j,
             model.k,
             model.t,
-            rule=self.specialty_assignment_rule)
+            rule=lambda model, j, k, t: self.specialty_assignment_rule(model, j, k, t))
 
     def define_anesthetist_assignment_constraint(self, model):
         model.anesthetist_assignment_constraint = pyo.Constraint(
             model.i,
             model.t,
-            rule=self.anesthetist_assignment_rule)
+            rule=lambda model, i, t: self.anesthetist_assignment_rule(model, i, t))
 
     def define_anesthetist_time_constraint(self, model):
         model.anesthetist_time_constraint = pyo.Constraint(
             model.alpha,
             model.t,
-            rule=self.anesthetist_time_rule)
+            rule=lambda model, alpha, t: self.anesthetist_time_rule(model, alpha, t))
 
     def define_anesthetist_no_overlap_constraint(self, model):
         model.anesthetist_no_overlap_constraint = pyo.Constraint(
@@ -205,21 +205,21 @@ class Planner(ABC):
             model.k,
             model.t,
             model.alpha,
-            rule=self.anesthetist_no_overlap_rule)
+            rule=lambda model, i1, i2, k1, k2, t, alpha: self.anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha))
 
     def define_lambda_constraint(self, model):
         model.lambda_constraint = pyo.Constraint(
             model.i,
             model.i,
             model.t,
-            rule=self.lambda_rule)
+            rule=lambda model, i1, i2, t: self.lambda_rule(model, i1, i2, t))
 
     def define_end_of_day_constraint(self, model):
         model.end_of_day_constraint = pyo.Constraint(
             model.i,
             model.k,
             model.t,
-            rule=self.end_of_day_rule)
+            rule=lambda model, i, k, t: self.end_of_day_rule(model, i, k, t))
 
     def define_priority_constraint(self, model):
         model.priority_constraint = pyo.Constraint(
@@ -227,7 +227,7 @@ class Planner(ABC):
             model.i,
             model.k,
             model.t,
-            rule=self.start_time_ordering_priority_rule)
+            rule=lambda model, i1, i2, k, t: self.start_time_ordering_priority_rule(model, i1, i2, k, t))
 
     def define_precedence_constraint(self, model):
         model.precedence_constraint = pyo.Constraint(
@@ -235,7 +235,7 @@ class Planner(ABC):
             model.i,
             model.k,
             model.t,
-            rule=self.time_ordering_precedence_rule)
+            rule=lambda model, i1, i2, k, t: self.time_ordering_precedence_rule(model, i1, i2, k, t))
 
     def define_exclusive_precedence_constraint(self, model):
         model.exclusive_precedence_constraint = pyo.Constraint(
@@ -243,7 +243,7 @@ class Planner(ABC):
             model.i,
             model.k,
             model.t,
-            rule=self.exclusive_precedence_rule)
+            rule=lambda model, i1, i2, k, t: self.exclusive_precedence_rule(model, i1, i2, k, t))
 
     def define_z_constraints(self, model):
         model.z_constraints_1 = pyo.Constraint(
@@ -251,21 +251,21 @@ class Planner(ABC):
             model.i,
             model.k,
             model.t,
-            rule=self.z_rule_1)
+            rule=lambda model, alpha, i, k, t: self.z_rule_1(model, alpha, i, k, t))
 
         model.z_constraints_2 = pyo.Constraint(
             model.alpha,
             model.i,
             model.k,
             model.t,
-            rule=self.z_rule_2)
+            rule=lambda model, alpha, i, k, t: self.z_rule_2(model, alpha, i, k, t))
 
         model.z_constraints_3 = pyo.Constraint(
             model.alpha,
             model.i,
             model.k,
             model.t,
-            rule=self.z_rule_3)
+            rule=lambda model, alpha, i, k, t: self.z_rule_3(model, alpha, i, k, t))
 
     def define_objective(self, model):
         model.objective = pyo.Objective(
@@ -414,14 +414,14 @@ class SimplePlanner(Planner):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     def lambda_rule(self, model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def end_of_day_rule(self, model, i, k, t):
@@ -429,7 +429,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
     def time_ordering_precedence_rule(self, model, i1, i2, k, t):
@@ -439,7 +439,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
@@ -449,7 +449,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
     def exclusive_precedence_rule(self, model, i1, i2, k, t):
@@ -459,7 +459,7 @@ class SimplePlanner(Planner):
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     def define_model(self):
@@ -522,13 +522,16 @@ class SimplePlanner(Planner):
                 "time_limit_hit": self.time_limit_hit,
                 "upper_bound": self.upper_bound,
                 "status_ok": self.status_ok,
-                "gap": self.gap
+                "gap": self.gap,
+                "generated_constraints": self.generated_constraints,
+                "discarded_constrants": self.discarded_constraints,
+                "discarded_constraint_ratio": self.discarded_constraints / (self.discarded_constraints + self.generated_constraints)
                 }
 
     def solve_model(self, data):
+        self.reset_run_info()
         self.define_model()
         self.create_model_instance(data)
-        self.reset_run_info()
         self.fix_y_variables(self.model_instance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.model_instance, tee=True)
@@ -659,160 +662,19 @@ class TwoPhasePlanner(Planner):
         self.time_limit_hit = self.SP_model.results.solver.termination_condition in [
             TerminationCondition.maxTimeLimit]
 
-
 class LBBDPlanner(TwoPhasePlanner):
 
     def __init__(self, timeLimit, gap, iterations_cap, solver):
         super().__init__(timeLimit, gap, solver)
         self.iterations_cap = iterations_cap
 
-    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
-        if(model.status[i1, k1, t] == Planner.DISCARDED or model.status[i2, k2, t] == Planner.DISCARDED):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
-
-    def end_of_day_rule(self, model, i, k, t):
-        if(model.status[i, k, t] == Planner.DISCARDED):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if((model.specialty[i] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
-
-    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if(i1 == i2
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
-
-    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if(i1 == i2 or model.u[i1, i2] == 0
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
-
-    def exclusive_precedence_rule(self, model, i1, i2, k, t):
-        if(model.specialty[i1] != model.specialty[i2]):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        if(i1 >= i2
-           or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
-
-    def extract_run_info(self):
-        return {"cumulated_building_time": self.cumulated_building_time,
-                "solver_time": self.solver_time,
-                "time_limit_hit": self.time_limit_hit,
-                "upper_bound": self.upper_bound,
-                "status_ok": self.status_ok,
-                "gap": self.gap,
-                "MP_objective_function_value": self.MP_objective_function_value,
-                "objective_function_value": self.objective_function_value,
-                "MP_upper_bound": self.MP_upper_bound,
-                "MP_time_limit_hit": self.MP_time_limit_hit,
-                "time_limit_hit": self.time_limit_hit
-                }
-
-    def lambda_rule(self, model, i1, i2, t):
-        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        # if patients not on same day
-        if(sum(model.x_param[i1, k, t] for k in model.k) == 0 or sum(model.x_param[i2, k, t] for k in model.k) == 0):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
-        self.total_constraints += 1
-        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
-
+    @abstractmethod
     def extend_data(self, data):
-        x_param_dict = {}
-        status_dict = {}
-        for i in self.MP_instance.i:
-            for t in self.MP_instance.t:
-                # if patient is planned for day t, we allow her to be free in that day
-                if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
-                    for k in range(1, self.MP_instance.K + 1):
-                        status_dict[(i, k, t)] = Planner.FREE
-                        x_param_dict[(i, k, t)] = 1
-                # otherwise she is discarded, i.e. we do not allow her to be re-planned to another day t' != t
-                else:
-                    for k in range(1, self.MP_instance.K + 1):
-                        status_dict[(i, k, t)] = Planner.DISCARDED
-                        x_param_dict[(i, k, t)] = 0
-        data[None]['x_param'] = x_param_dict
-        data[None]['status'] = status_dict
+        pass
 
-    def fix_SP_variables(self, rule):
-        print("Fixing x variables for phase two...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i in self.MP_instance.i:
-                    if rule == VariablesFixingRule.GUARANTEED_FEASIBILITY:
-                        if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
-                            self.SP_instance.x[i, k, t].fix(0)
-                            for q in self.SP_instance.q:
-                                self.SP_instance.delta[q, i, k, t].fix(0)
-                            fixed += 1
-                    if rule == VariablesFixingRule.FIX_ALL:
-                        self.SP_instance.x[i, k, t].fix(round(self.MP_instance.x[i, k, t].value))
-                        for q in self.SP_instance.q:
-                            self.SP_instance.delta[q, i, k, t].fix(round(self.MP_instance.delta[q, i, k, t].value))
-                        fixed += 1
-        print(str(fixed) + " x variables fixed.")
-
-    def fix_MP_delta_variables(self):
-        print("Fixing delta variables for phase one...")
-        fixed = 0
-        for q in self.MP_instance.q:
-            for k in self.MP_instance.k:
-                for t in self.MP_instance.t:
-                    for i in self.MP_instance.i:
-                        if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
-                            self.MP_instance.delta[q, i, k, t].fix(0)
-                            fixed += 1
-        print(str(fixed) + " delta variables fixed.")
-
-    def fix_MP_x_variables(self):
-        print("Fixing x variables for phase one...")
-        fixed = 0
-        for k in self.MP_instance.k:
-            for t in self.MP_instance.t:
-                for i in self.MP_instance.i:
-                    if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
-                        self.MP_instance.x[i, k, t].fix(0)
-                        fixed += 1
-        print(str(fixed) + " x variables fixed.")
+    @abstractmethod
+    def fix_SP_variables(self):
+        pass
 
     def has_solution(self):
         return self.SP_model.results.solver.termination_condition in {TerminationCondition.feasible,
@@ -868,14 +730,17 @@ class LBBDPlanner(TwoPhasePlanner):
                 "specialty_1_OR_utilization": specialty_1_OR_utilization,
                 "specialty_2_OR_utilization": specialty_2_OR_utilization,
                 "specialty_1_selection_ratio": specialty_1_selection_ratio,
-                "specialty_2_selection_ratio": specialty_2_selection_ratio
+                "specialty_2_selection_ratio": specialty_2_selection_ratio,
+                "generated_constraints": self.generated_constraints,
+                "discarded_constraints": self.discarded_constraints,
+                "discarded_constraints_ratio": self.discarded_constraints / (self.discarded_constraints + self.generated_constraints)
                 }
 
     def is_optimal(self):
         return isclose(pyo.value(self.MP_instance.objective), pyo.value(self.SP_instance.objective))
 
     def MP_anesthetist_time_rule(self, model, t):
-        self.total_constraints += 1
+        self.generated_constraints += 1
         return sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) + sum(model.a[i] * model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for q in model.q) <= sum(model.An[alpha, t] for alpha in model.alpha)
 
     def define_MP_anesthetist_time_constraint(self, model):
@@ -920,8 +785,8 @@ class LBBDPlanner(TwoPhasePlanner):
             self.solution = Solution(self.SP_instance)
 
     def solve_model(self, data):
-        self.define_model()
         self.reset_run_info()
+        self.define_model()
         self.create_MP_instance(data)
         self.MP_instance.patients_cuts = pyo.ConstraintList()
         self.MP_instance.objective_function_cuts = pyo.ConstraintList()
@@ -942,7 +807,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
             # SP
             self.create_SP_instance(data)
-            self.fix_SP_variables(rule=VariablesFixingRule.GUARANTEED_FEASIBILITY)
+            self.fix_SP_variables()
             self.solve_SP()
 
             if self.has_solution():
@@ -972,9 +837,138 @@ class LBBDPlanner(TwoPhasePlanner):
 
         self.gap = round((1 - self.objective_function_value / self.MP_least_upper_bound) * 100, 6)
 
-class VariablesFixingRule(Enum):
-    GUARANTEED_FEASIBILITY = "guaranteed_feasibility",
-    FIX_ALL = "fix_all"
+
+class HeuristicLBBDPlanner(LBBDPlanner):
+
+    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
+        if(model.status[i1, k1, t] == Planner.DISCARDED or model.status[i2, k2, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+
+    def end_of_day_rule(self, model, i, k, t):
+        if(model.status[i, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if((model.specialty[i] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
+
+    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
+        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+
+    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
+        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2 or model.u[i1, i2] == 0
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
+
+    def exclusive_precedence_rule(self, model, i1, i2, k, t):
+        if(model.specialty[i1] != model.specialty[i2]):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 >= i2
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
+
+    def lambda_rule(self, model, i1, i2, t):
+        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        # if patients not on same day
+        if(all(model.status[i1, k, t] == Planner.DISCARDED for k in model.k) or all(model.status[i2, k, t] == Planner.DISCARDED for k in model.k)):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
+
+    def extend_data(self, data):
+        status_dict = {}
+        for i in self.MP_instance.i:
+            for t in self.MP_instance.t:
+                # if patient is planned for day t, we allow her to be free in that day
+                if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
+                    for k in range(1, self.MP_instance.K + 1):
+                        status_dict[(i, k, t)] = Planner.FREE
+                # otherwise she is discarded, i.e. we do not allow her to be re-planned to another day t' != t
+                else:
+                    for k in range(1, self.MP_instance.K + 1):
+                        status_dict[(i, k, t)] = Planner.DISCARDED
+        data[None]['status'] = status_dict
+
+    def fix_SP_variables(self):
+        print("Fixing x variables for phase two...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i in self.MP_instance.i:
+                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                        self.SP_instance.x[i, k, t].fix(0)
+                        for q in self.SP_instance.q:
+                            self.SP_instance.delta[q, i, k, t].fix(0)
+                        fixed += 1
+                    # if rule == VariablesFixingRule.FIX_ALL:
+                    #     self.SP_instance.x[i, k, t].fix(round(self.MP_instance.x[i, k, t].value))
+                    #     for q in self.SP_instance.q:
+                    #         self.SP_instance.delta[q, i, k, t].fix(round(self.MP_instance.delta[q, i, k, t].value))
+                    #     fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
+    def fix_MP_delta_variables(self):
+        print("Fixing delta variables for phase one...")
+        fixed = 0
+        for q in self.MP_instance.q:
+            for k in self.MP_instance.k:
+                for t in self.MP_instance.t:
+                    for i in self.MP_instance.i:
+                        if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                            self.MP_instance.delta[q, i, k, t].fix(0)
+                            fixed += 1
+        print(str(fixed) + " delta variables fixed.")
+
+    def fix_MP_x_variables(self):
+        print("Fixing x variables for phase one...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i in self.MP_instance.i:
+                    if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                        self.MP_instance.x[i, k, t].fix(0)
+                        fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
 
 class Solution:
 
