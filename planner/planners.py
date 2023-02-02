@@ -15,7 +15,6 @@ class Planner(ABC):
 
     DISCARDED = 0
     FREE = 1
-    FIXED = 2
 
     def __init__(self, timeLimit, gap, solver):
         self.solver = pyo.SolverFactory(solver)
@@ -54,6 +53,8 @@ class Planner(ABC):
         self.time_limit_hit = False
         self.MP_upper_bound = 0
         self.upper_bound = 0
+        self.discarded_constraints = 0
+        self.total_constraints = 0
 
 
     @abstractmethod
@@ -64,90 +65,84 @@ class Planner(ABC):
     def define_model(self):
         pass
 
-    @staticmethod
-    def single_surgery_rule(model, i):
+    def single_surgery_rule(self, model, i):
+        self.total_constraints += 1
         return sum(model.x[i, k, t] for k in model.k for t in model.t) <= 1
 
-    @staticmethod
-    def single_delay_rule(model, i):
+    def single_delay_rule(self, model, i):
+        self.total_constraints += 1
         return sum(model.delta[q, i, k, t] for k in model.k for t in model.t for q in model.q) <= 1
 
-    @staticmethod
-    def robustness_constraints_rule(model, q, k, t):
+    def robustness_constraints_rule(self, model, q, k, t):
+        self.total_constraints += 1
         return sum(model.delta[q, i, k, t] for i in model.i) <= model.Gamma[q, k, t]
 
-    @staticmethod
-    def delay_implication_constraint_rule(model, i, k, t):
+    def delay_implication_constraint_rule(self, model, i, k, t):
+        self.total_constraints += 1
         return model.x[i, k, t] >= sum(model.delta[q, i, k, t] for q in model.q)
 
-    @staticmethod
-    def surgery_time_rule(model, k, t):
+    def surgery_time_rule(self, model, k, t):
+        self.total_constraints += 1
         return sum(model.p[i] * model.x[i, k, t] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) for i in model.i) <= model.s[k, t]
 
-    @staticmethod
-    def specialty_assignment_rule(model, j, k, t):
+    def specialty_assignment_rule(self, model, j, k, t):
+        self.total_constraints += 1
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
-    @staticmethod
-    def anesthetist_assignment_rule(model, i, t):
+    def anesthetist_assignment_rule(self, model, i, t):
         if(model.a[i] == 0):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
-    @staticmethod
-    def anesthetist_time_rule(model, alpha, t):
+    def anesthetist_time_rule(self, model, alpha, t):
+        self.total_constraints += 1
         return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q) <= model.An[alpha, t]
 
     # needed for linearizing product of binary variables
-    @staticmethod
-    def z_rule_1(model, alpha, i, k, t):
+    def z_rule_1(self, model, alpha, i, k, t):
+        self.total_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) <= model.beta[alpha, i, t]
 
-    @staticmethod
-    def z_rule_2(model, alpha, i, k, t):
+    def z_rule_2(self, model, alpha, i, k, t):
+        self.total_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) <= sum(model.delta[q, i, k, t] for q in model.q)
 
-    @staticmethod
-    def z_rule_3(model, alpha, i, k, t):
+    def z_rule_3(self, model, alpha, i, k, t):
+        self.total_constraints += 1
         return sum(model.z[q, alpha, i, k, t] for q in model.q) >= model.beta[alpha, i, t] + sum(model.delta[q, i, k, t] for q in model.q) - 1
 
     # patients with same anesthetist on same day but different room cannot overlap
-    @staticmethod
     @abstractmethod
-    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
         pass
 
     # precedence across rooms
-    @staticmethod
     @abstractmethod
-    def lambda_rule(model, i1, i2, t):
+    def lambda_rule(self, model, i1, i2, t):
         pass
 
     # ensure gamma plus operation time does not exceed end of day
-    @staticmethod
     @abstractmethod
-    def end_of_day_rule(model, i, k, t):
+    def end_of_day_rule(self, model, i, k, t):
         pass
 
     # ensure that patient i1 terminates operation before i2, if y_12kt = 1
-    @staticmethod
     @abstractmethod
-    def time_ordering_precedence_rule(model, i1, i2, k, t):
+    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
         pass
 
-    @staticmethod
     @abstractmethod
-    def start_time_ordering_priority_rule(model, i1, i2, k, t):
+    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         pass
 
     # either i1 comes before i2 in (k, t) or i2 comes before i1 in (k, t)
-    @staticmethod
     @abstractmethod
-    def exclusive_precedence_rule(model, i1, i2, k, t):
+    def exclusive_precedence_rule(self, model, i1, i2, k, t):
         pass
 
-    @staticmethod
-    def objective_function(model):
+    def objective_function(self, model):
         N = 1 / (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
         return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) + N * R
@@ -415,50 +410,56 @@ class SimplePlanner(Planner):
         self.model = pyo.AbstractModel()
         self.model_instance = None
 
-    @staticmethod
-    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
-    @staticmethod
-    def lambda_rule(model, i1, i2, t):
+    def lambda_rule(self, model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
-    @staticmethod
-    def end_of_day_rule(model, i, k, t):
+    def end_of_day_rule(self, model, i, k, t):
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
-    @staticmethod
-    def time_ordering_precedence_rule(model, i1, i2, k, t):
+    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
         if(i1 == i2
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
-    @staticmethod
-    def start_time_ordering_priority_rule(model, i1, i2, k, t):
+    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if(i1 == i2 or model.u[i1, i2] == 0
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
-    @staticmethod
-    def exclusive_precedence_rule(model, i1, i2, k, t):
+    def exclusive_precedence_rule(self, model, i1, i2, k, t):
         if(i1 >= i2
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     def define_model(self):
@@ -665,56 +666,67 @@ class LBBDPlanner(TwoPhasePlanner):
         super().__init__(timeLimit, gap, solver)
         self.iterations_cap = iterations_cap
 
-    @staticmethod
-    def anesthetist_no_overlap_rule(model, i1, i2, k1, k2, t, alpha):
+    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
         if(model.status[i1, k1, t] == Planner.DISCARDED or model.status[i2, k2, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
-    @staticmethod
-    def end_of_day_rule(model, i, k, t):
+    def end_of_day_rule(self, model, i, k, t):
         if(model.status[i, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
            or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
-    @staticmethod
-    def time_ordering_precedence_rule(model, i1, i2, k, t):
+    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
-    @staticmethod
-    def start_time_ordering_priority_rule(model, i1, i2, k, t):
+    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2 or model.u[i1, i2] == 0
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
 
-    @staticmethod
-    def exclusive_precedence_rule(model, i1, i2, k, t):
+    def exclusive_precedence_rule(self, model, i1, i2, k, t):
         if(model.specialty[i1] != model.specialty[i2]):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 >= i2
            or (model.specialty[i1] != model.specialty[i2])
            or (model.specialty[i1] == 1 and (k == 3 or k == 4))
            or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
 
     def extract_run_info(self):
@@ -731,13 +743,15 @@ class LBBDPlanner(TwoPhasePlanner):
                 "time_limit_hit": self.time_limit_hit
                 }
 
-    @staticmethod
-    def lambda_rule(model, i1, i2, t):
+    def lambda_rule(self, model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
         # if patients not on same day
         if(sum(model.x_param[i1, k, t] for k in model.k) == 0 or sum(model.x_param[i2, k, t] for k in model.k) == 0):
+            self.discarded_constraints += 1
             return pyo.Constraint.Skip
+        self.total_constraints += 1
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def extend_data(self, data):
@@ -745,11 +759,12 @@ class LBBDPlanner(TwoPhasePlanner):
         status_dict = {}
         for i in self.MP_instance.i:
             for t in self.MP_instance.t:
-                # patient scheduled on day t
+                # if patient is planned for day t, we allow her to be free in that day
                 if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
                     for k in range(1, self.MP_instance.K + 1):
                         status_dict[(i, k, t)] = Planner.FREE
                         x_param_dict[(i, k, t)] = 1
+                # otherwise she is discarded, i.e. we do not allow her to be re-planned to another day t' != t
                 else:
                     for k in range(1, self.MP_instance.K + 1):
                         status_dict[(i, k, t)] = Planner.DISCARDED
@@ -763,14 +778,7 @@ class LBBDPlanner(TwoPhasePlanner):
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if rule == VariablesFixingRule.MORE_RESTRICTIVE_GUARANTEED_FEASIBILITY:
-                        if(round(self.MP_instance.x[i, k, t].value) == 1 and self.SP_instance.a[i] == 0):
-                            self.SP_instance.x[i, k, t].fix(1)
-                            fixed += 1
-                        if(round(self.MP_instance.x[i, k, t].value) == 0):
-                            self.SP_instance.x[i, k, t].fix(0)
-                            fixed += 1
-                    if rule == VariablesFixingRule.LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY:
+                    if rule == VariablesFixingRule.GUARANTEED_FEASIBILITY:
                         if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
                             self.SP_instance.x[i, k, t].fix(0)
                             for q in self.SP_instance.q:
@@ -807,7 +815,6 @@ class LBBDPlanner(TwoPhasePlanner):
         print(str(fixed) + " x variables fixed.")
 
     def has_solution(self):
-        # return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
         return self.SP_model.results.solver.termination_condition in {TerminationCondition.feasible,
                                                                       TerminationCondition.optimal,
                                                                       TerminationCondition.maxTimeLimit
@@ -867,8 +874,8 @@ class LBBDPlanner(TwoPhasePlanner):
     def is_optimal(self):
         return isclose(pyo.value(self.MP_instance.objective), pyo.value(self.SP_instance.objective))
 
-    @staticmethod
-    def MP_anesthetist_time_rule(model, t):
+    def MP_anesthetist_time_rule(self, model, t):
+        self.total_constraints += 1
         return sum(model.a[i] * model.p[i] * model.x[i, k, t] for i in model.i for k in model.k) + sum(model.a[i] * model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for q in model.q) <= sum(model.An[alpha, t] for alpha in model.alpha)
 
     def define_MP_anesthetist_time_constraint(self, model):
@@ -889,11 +896,7 @@ class LBBDPlanner(TwoPhasePlanner):
         self.define_specialty_assignment_constraints(self.MP_model)
         self.define_anesthetists_number_param(self.MP_model)
         self.define_anesthetists_range_set(self.MP_model)
-        # self.define_beta_variables(self.MP_model)
         self.define_anesthetists_availability(self.MP_model)
-        # self.define_anesthetist_assignment_constraint(self.MP_model)
-        # self.define_z_variables(self.MP_model)
-        # self.define_z_constraints(self.MP_model)
         self.define_MP_anesthetist_time_constraint(self.MP_model)
 
     def add_objective_cut(self):
@@ -939,7 +942,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
             # SP
             self.create_SP_instance(data)
-            self.fix_SP_variables(rule=VariablesFixingRule.LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY)
+            self.fix_SP_variables(rule=VariablesFixingRule.GUARANTEED_FEASIBILITY)
             self.solve_SP()
 
             if self.has_solution():
@@ -970,8 +973,7 @@ class LBBDPlanner(TwoPhasePlanner):
         self.gap = round((1 - self.objective_function_value / self.MP_least_upper_bound) * 100, 6)
 
 class VariablesFixingRule(Enum):
-    LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY = "less_restrictive_guaranteed_feasibility",
-    MORE_RESTRICTIVE_GUARANTEED_FEASIBILITY = "more_restrictive_guaranteed_feasibility",
+    GUARANTEED_FEASIBILITY = "guaranteed_feasibility",
     FIX_ALL = "fix_all"
 
 class Solution:
