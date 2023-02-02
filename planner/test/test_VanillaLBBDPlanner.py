@@ -1,18 +1,18 @@
 import unittest
 
-from planners import LBBDPlanner
+from planners import VanillaLBBDPlanner
 from test.common import build_data_dictionary
 from test.common import TestCommon
 
 
-class TestLBBD(TestCommon):
+class TestHeuristicLBBDPlanner(TestCommon):
 
     @classmethod
     def setUpClass(self):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = LBBDPlanner(timeLimit=900, gap=0.01, iterations_cap=30, solver="cplex")
+        planner = VanillaLBBDPlanner(timeLimit=900, gap=0.01, iterations_cap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

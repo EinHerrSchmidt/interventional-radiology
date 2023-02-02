@@ -7,7 +7,8 @@ def build_data_dictionary():
                                     days = 5,
                                     anesthetists = 2,
                                     infection_frequency = 0.5,
-                                    anesthesia_frequency = 0.2)
+                                    anesthesia_frequency = 0.2,
+                                    robustness_parameter=2)
 
     dataMaker = DataMaker(seed=52876, data_descriptor=data_descriptor)
     return dataMaker.create_data_dictionary()

@@ -939,11 +939,6 @@ class HeuristicLBBDPlanner(LBBDPlanner):
                         for q in self.SP_instance.q:
                             self.SP_instance.delta[q, i, k, t].fix(0)
                         fixed += 1
-                    # if rule == VariablesFixingRule.FIX_ALL:
-                    #     self.SP_instance.x[i, k, t].fix(round(self.MP_instance.x[i, k, t].value))
-                    #     for q in self.SP_instance.q:
-                    #         self.SP_instance.delta[q, i, k, t].fix(round(self.MP_instance.delta[q, i, k, t].value))
-                    #     fixed += 1
         print(str(fixed) + " x variables fixed.")
 
     def fix_MP_delta_variables(self):
@@ -967,6 +962,103 @@ class HeuristicLBBDPlanner(LBBDPlanner):
                     if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
                         self.MP_instance.x[i, k, t].fix(0)
                         fixed += 1
+        print(str(fixed) + " x variables fixed.")
+
+
+class VanillaLBBDPlanner(LBBDPlanner):
+
+    def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
+        if(model.x_param[i1, k1, t] + model.x_param[i2, k2, t] < 2):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+
+    def end_of_day_rule(self, model, i, k, t):
+        if(model.x_param[i, k, t] == 0):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if((model.specialty[i] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
+
+    def time_ordering_precedence_rule(self, model, i1, i2, k, t):
+        if( model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+
+    def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
+        if( model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 == i2 or model.u[i1, i2] == 0
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.gamma[i1] * model.u[i1, i2] <= model.gamma[i2] * (1 - model.u[i2, i1]) + model.bigM[2] * (2 - model.x[i1, k, t] - model.x[i2, k, t])
+
+    def exclusive_precedence_rule(self, model, i1, i2, k, t):
+        if(model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        if(i1 >= i2
+           or (model.specialty[i1] != model.specialty[i2])
+           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
+           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.y[i1, i2, k, t] + model.y[i2, i1, k, t] == 1
+
+    def lambda_rule(self, model, i1, i2, t):
+        if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        # if patients not on same day
+        if(sum(model.x_param[i1, k, t] for k in model.k) == 0 or sum(model.x_param[i2, k, t] for k in model.k) == 0):
+            self.discarded_constraints += 1
+            return pyo.Constraint.Skip
+        self.generated_constraints += 1
+        return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
+
+    def extend_data(self, data):
+        x_param_dict = {}
+        for i in range(1, self.MP_instance.I + 1):
+            for k in range(1, self.MP_instance.K + 1):
+                for t in range(1, self.MP_instance.T + 1):
+                    if(round(self.MP_instance.x[i, k, t].value) == 1):
+                        x_param_dict[(i, k, t)] = 1
+                    else:
+                        x_param_dict[(i, k, t)] = 0
+        data[None]['x_param'] = x_param_dict
+
+    def fix_SP_variables(self):
+        print("Fixing x variables for phase two...")
+        fixed = 0
+        for k in self.MP_instance.k:
+            for t in self.MP_instance.t:
+                for i in self.MP_instance.i:
+                    self.SP_instance.x[i, k, t].fix(round(self.MP_instance.x[i, k, t].value))
+                    for q in self.SP_instance.q:
+                        self.SP_instance.delta[q, i, k, t].fix(round(self.MP_instance.delta[q, i, k, t].value))
+                    fixed += 1
         print(str(fixed) + " x variables fixed.")
 
 

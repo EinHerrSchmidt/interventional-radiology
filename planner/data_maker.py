@@ -11,7 +11,7 @@ from planner.model import Patient
 class DataDescriptor:
     """Used to define properties of the sample to be generated."""
 
-    def __init__(self, patients, specialties=2, specialty_frequency=[0.83, 0.17], operating_rooms=4, days=5, anesthetists=2, infection_frequency=0.5, anesthesia_frequency=0.5):
+    def __init__(self, patients, specialties=2, specialty_frequency=[0.83, 0.17], operating_rooms=4, days=5, anesthetists=2, infection_frequency=0.5, anesthesia_frequency=0.5, robustness_parameter=3):
         self.patients = patients
         self.specialties = [i for i in range(1, specialties + 1)]
         self.operating_rooms = operating_rooms
@@ -20,6 +20,7 @@ class DataDescriptor:
         self.infection_frequency = infection_frequency
         self.anesthesia_frequency = anesthesia_frequency
         self.specialty_frequency = specialty_frequency
+        self.robustness_parameter = robustness_parameter
 
         self.operating_day_duration_table = sd.operating_day_duration_table
         self.anesthesia_time_table = sd.anesthesia_time_table
@@ -217,6 +218,16 @@ class DataMaker:
                 availability[(alpha, t)] = 270 # assume fixed for now
         return availability
 
+    # assumes same robustness parameter Gamma is used in each (k, t) slot
+    # and a single delay type is possible (index q = 1)
+    def generate_robustness_table(self):
+        robustness_table = {}
+        for k in range(1, self.data_descriptor.operating_rooms + 1):
+            for t in range(1, self.data_descriptor.days + 1):
+                robustness_table[(1, k, t)] = self.data_descriptor.robustness_parameter
+
+        return robustness_table
+
     def create_data_dictionary(self):
         # for now we assume same duration for each room, on each day
         maxOperatingRoomTime = 270
@@ -231,7 +242,7 @@ class DataMaker:
                 'Q': {None: 1},
                 's': self.data_descriptor.operating_day_duration_table,
                 'An': self.generate_anesthetists_availability(),
-                'Gamma': self.data_descriptor.robustness_table,
+                'Gamma': self.generate_robustness_table(),
                 'tau': self.generate_tau_parameters(),
                 'p': self.create_dictionary_entry(self.operating_times),
                 'd': self.create_delay_table(),

@@ -1,1 +1,1 @@
-from planner.planners import SimplePlanner, LBBDPlanner
+from planner.planners import SimplePlanner, HeuristicLBBDPlanner, VanillaLBBDPlanner
