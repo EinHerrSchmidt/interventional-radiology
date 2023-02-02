@@ -746,7 +746,7 @@ class LBBDPlanner(TwoPhasePlanner):
     def define_MP_anesthetist_time_constraint(self, model):
         model.MP_anesthetist_time_constraint = pyo.Constraint(
             model.t,
-            rule=self.MP_anesthetist_time_rule)
+            rule=lambda model, t: self.MP_anesthetist_time_rule(model, t))
 
     def define_MP(self):
         self.define_sets(self.MP_model)
