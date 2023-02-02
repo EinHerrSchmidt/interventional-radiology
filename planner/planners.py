@@ -763,7 +763,14 @@ class LBBDPlanner(TwoPhasePlanner):
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if rule == VariablesFixingRule.GUARANTEED_FEASIBILITY:
+                    if rule == VariablesFixingRule.MORE_RESTRICTIVE_GUARANTEED_FEASIBILITY:
+                        if(round(self.MP_instance.x[i, k, t].value) == 1 and self.SP_instance.a[i] == 0):
+                            self.SP_instance.x[i, k, t].fix(1)
+                            fixed += 1
+                        if(round(self.MP_instance.x[i, k, t].value) == 0):
+                            self.SP_instance.x[i, k, t].fix(0)
+                            fixed += 1
+                    if rule == VariablesFixingRule.LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY:
                         if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
                             self.SP_instance.x[i, k, t].fix(0)
                             for q in self.SP_instance.q:
@@ -932,7 +939,7 @@ class LBBDPlanner(TwoPhasePlanner):
 
             # SP
             self.create_SP_instance(data)
-            self.fix_SP_variables(rule=VariablesFixingRule.GUARANTEED_FEASIBILITY)
+            self.fix_SP_variables(rule=VariablesFixingRule.LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY)
             self.solve_SP()
 
             if self.has_solution():
@@ -963,7 +970,8 @@ class LBBDPlanner(TwoPhasePlanner):
         self.gap = round((1 - self.objective_function_value / self.MP_least_upper_bound) * 100, 6)
 
 class VariablesFixingRule(Enum):
-    GUARANTEED_FEASIBILITY = "guaranteed_feasibility",
+    LESS_RESTRICTIVE_GUARANTEED_FEASIBILITY = "less_restrictive_guaranteed_feasibility",
+    MORE_RESTRICTIVE_GUARANTEED_FEASIBILITY = "more_restrictive_guaranteed_feasibility",
     FIX_ALL = "fix_all"
 
 class Solution:
