@@ -802,7 +802,8 @@ class LBBDPlanner(TwoPhasePlanner):
     def has_solution(self):
         # return model.results.solver.termination_condition in [TerminationCondition.infeasibleOrUnbounded, TerminationCondition.infeasible, TerminationCondition.unbounded]
         return self.SP_model.results.solver.termination_condition in {TerminationCondition.feasible,
-                                                                      TerminationCondition.optimal
+                                                                      TerminationCondition.optimal,
+                                                                      TerminationCondition.maxTimeLimit
                                                                      }
 
     def solve_MP(self):
