@@ -1,9 +1,7 @@
-from numpy import sort
 import plotly.express as px
 import pandas as pd
 import datetime
 
-from planner.model import Patient
 
 class SolutionVisualizer:
 
