@@ -7,7 +7,7 @@ def build_data_dictionary():
                                     days = 5,
                                     anesthetists = 2,
                                     infection_frequency = 0.5,
-                                    anesthesia_frequency = 0.2,
+                                    anesthesia_frequency = 0.5,
                                     robustness_parameter=2)
 
     dataMaker = DataMaker(seed=52876, data_descriptor=data_descriptor)
@@ -37,8 +37,8 @@ class TestCommon(unittest.TestCase):
                 for i1 in range(0, patientsNumber):
                     for i2 in range(0, patientsNumber):
                         if(i1 != i2):
-                            self.assertTrue((patients[i1].order + patients[i1].operatingTime <= patients[i2].order or patients[i2].order + patients[i2].operatingTime <= patients[i1].order)
-                                            and not (patients[i1].order + patients[i1].operatingTime <= patients[i2].order and patients[i2].order + patients[i2].operatingTime <= patients[i1].order))
+                            self.assertTrue((patients[i1].order + patients[i1].operatingTime + patients[i1].arrival_delay <= patients[i2].order or patients[i2].order + patients[i2].operatingTime + patients[i2].arrival_delay <= patients[i1].order)
+                                            and not (patients[i1].order + patients[i1].operatingTime + patients[i1].arrival_delay <= patients[i2].order and patients[i2].order + patients[i2].operatingTime + patients[i2].arrival_delay <= patients[i1].order))
 
     def non_overlapping_anesthetists(self):
         K = self.dataDictionary[None]["K"][None]
@@ -57,8 +57,8 @@ class TestCommon(unittest.TestCase):
                     for i1 in range(0, k1PatientsNumber):
                         for i2 in range(0, k2PatientsNumber):
                             if(k1Patients[i1].anesthetist and k2Patients[i2].anesthetist and k1Patients[i1].anesthetist == k2Patients[i2].anesthetist):
-                                self.assertTrue((k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order or k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order)
-                                 and not (k1Patients[i1].order + k1Patients[i1].operatingTime <= k2Patients[i2].order and k2Patients[i2].order + k2Patients[i2].operatingTime <= k1Patients[i1].order))
+                                self.assertTrue((k1Patients[i1].order + k1Patients[i1].operatingTime + k1Patients[i1].arrival_delay <= k2Patients[i2].order or k2Patients[i2].order + k2Patients[i2].operatingTime + k2Patients[i2].arrival_delay <= k1Patients[i1].order)
+                                 and not (k1Patients[i1].order + k1Patients[i1].operatingTime + k1Patients[i1].arrival_delay <= k2Patients[i2].order and k2Patients[i2].order + k2Patients[i2].operatingTime + k2Patients[i2].arrival_delay <= k1Patients[i1].order))
 
     def surgery_time_constraint(self):
         K = self.dataDictionary[None]["K"][None]
@@ -70,7 +70,8 @@ class TestCommon(unittest.TestCase):
                 if(patientsNumber == 0):
                     continue
                 totalOperatingTime = sum(map(lambda p: p.operatingTime, patients))
-                self.assertTrue(totalOperatingTime <= self.dataDictionary[None]["s"][(k, t)])
+                total_delay_time = sum(map(lambda p: p.arrival_delay, patients))
+                self.assertTrue(totalOperatingTime + total_delay_time <= self.dataDictionary[None]["s"][(k, t)])
 
     def end_of_day_constraint(self):
         K = self.dataDictionary[None]["K"][None]
@@ -82,7 +83,7 @@ class TestCommon(unittest.TestCase):
                 if(patientsNumber == 0):
                     continue
                 for i in range(0, patientsNumber):
-                    self.assertTrue(patients[i].order + patients[i].operatingTime <= self.dataDictionary[None]["s"][(k, t)])
+                    self.assertTrue(patients[i].order + patients[i].operatingTime + patients[i].arrival_delay <= self.dataDictionary[None]["s"][(k, t)])
 
     def anesthesia_total_time_constraint(self):
         K = self.dataDictionary[None]["K"][None]
@@ -97,7 +98,13 @@ class TestCommon(unittest.TestCase):
                     filter(lambda p: p.anesthetist and p.anesthetist == a, patients))
                 if(len(patientsWithAnesthetist) == 0):
                     continue
-                self.assertTrue(sum(map(lambda p: p.operatingTime, patientsWithAnesthetist)) <= self.dataDictionary[None]["An"][(a, t)])
+                surgery_time = sum(map(lambda p: p.operatingTime, patientsWithAnesthetist))
+                arrival_delay_time = 0
+                for patient in patientsWithAnesthetist:
+                    if patient.delay:
+                        arrival_delay_time += patient.arrival_delay
+
+                self.assertTrue(surgery_time + arrival_delay_time <= self.dataDictionary[None]["An"][(a, t)])
 
     def single_surgery(self):
         K = self.dataDictionary[None]["K"][None]

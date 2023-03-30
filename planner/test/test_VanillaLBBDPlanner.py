@@ -5,7 +5,7 @@ from test.common import build_data_dictionary
 from test.common import TestCommon
 
 
-class TestHeuristicLBBDPlanner(TestCommon):
+class TestVanillaLBBDPlanner(TestCommon):
 
     @classmethod
     def setUpClass(self):
