@@ -1,5 +1,4 @@
 from __future__ import division
-from enum import Enum
 import re
 import time
 import pyomo.environ as pyo
@@ -101,17 +100,17 @@ class Planner(ABC):
         return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q) <= model.An[alpha, t]
 
     # needed for linearizing product of binary variables
-    def z_rule_1(self, model, alpha, i, k, t):
+    def z_rule_1(self, model, q, alpha, i, k, t):
         self.generated_constraints += 1
-        return sum(model.z[q, alpha, i, k, t] for q in model.q) <= model.beta[alpha, i, t]
+        return model.z[q, alpha, i, k, t] <= model.beta[alpha, i, t]
 
-    def z_rule_2(self, model, alpha, i, k, t):
+    def z_rule_2(self, model, q, alpha, i, k, t):
         self.generated_constraints += 1
-        return sum(model.z[q, alpha, i, k, t] for q in model.q) <= sum(model.delta[q, i, k, t] for q in model.q)
+        return model.z[q, alpha, i, k, t] <= model.delta[q, i, k, t]
 
-    def z_rule_3(self, model, alpha, i, k, t):
+    def z_rule_3(self, model, q, alpha, i, k, t):
         self.generated_constraints += 1
-        return sum(model.z[q, alpha, i, k, t] for q in model.q) >= model.beta[alpha, i, t] + sum(model.delta[q, i, k, t] for q in model.q) - 1
+        return model.z[q, alpha, i, k, t] >= model.beta[alpha, i, t] + model.delta[q, i, k, t] - 1
 
     # patients with same anesthetist on same day but different room cannot overlap
     @abstractmethod
@@ -247,25 +246,28 @@ class Planner(ABC):
 
     def define_z_constraints(self, model):
         model.z_constraints_1 = pyo.Constraint(
+            model.q,
             model.alpha,
             model.i,
             model.k,
             model.t,
-            rule=lambda model, alpha, i, k, t: self.z_rule_1(model, alpha, i, k, t))
+            rule=lambda model, q, alpha, i, k, t: self.z_rule_1(model, q, alpha, i, k, t))
 
         model.z_constraints_2 = pyo.Constraint(
+            model.q,
             model.alpha,
             model.i,
             model.k,
             model.t,
-            rule=lambda model, alpha, i, k, t: self.z_rule_2(model, alpha, i, k, t))
+            rule=lambda model, q, alpha, i, k, t: self.z_rule_2(model, q, alpha, i, k, t))
 
         model.z_constraints_3 = pyo.Constraint(
+            model.q,
             model.alpha,
             model.i,
             model.k,
             model.t,
-            rule=lambda model, alpha, i, k, t: self.z_rule_3(model, alpha, i, k, t))
+            rule=lambda model, q, alpha, i, k, t: self.z_rule_3(model, q, alpha, i, k, t))
 
     def define_objective(self, model):
         model.objective = pyo.Objective(
@@ -517,15 +519,35 @@ class SimplePlanner(Planner):
         print(str(fixed) + " y variables fixed.")
 
     def extract_run_info(self):
+        OR_utilization_by_specialty = self.compute_operating_room_utilization_by_specialty()
+        specialty_selection_ratio = self.compute_specialty_selection_ratio()
+
+        specialty_1_OR_utilization = None
+        specialty_2_OR_utilization = None
+        specialty_1_selection_ratio = None
+        specialty_2_selection_ratio = None
+
+        if OR_utilization_by_specialty:
+            specialty_1_OR_utilization = OR_utilization_by_specialty[1]
+            specialty_2_OR_utilization = OR_utilization_by_specialty[2]
+        if specialty_selection_ratio:
+            specialty_1_selection_ratio = specialty_selection_ratio[1]
+            specialty_2_selection_ratio = specialty_selection_ratio[2]
+
         return {"cumulated_building_time": self.cumulated_building_time,
                 "solver_time": self.solver_time,
                 "time_limit_hit": self.time_limit_hit,
                 "upper_bound": self.upper_bound,
                 "status_ok": self.status_ok,
                 "gap": self.gap,
+                "objective_function_value": self.solution.objective_value,
+                "specialty_1_OR_utilization": specialty_1_OR_utilization,
+                "specialty_2_OR_utilization": specialty_2_OR_utilization,
+                "specialty_1_selection_ratio": specialty_1_selection_ratio,
+                "specialty_2_selection_ratio": specialty_2_selection_ratio,
                 "generated_constraints": self.generated_constraints,
-                "discarded_constrants": self.discarded_constraints,
-                "discarded_constraint_ratio": self.discarded_constraints / (self.discarded_constraints + self.generated_constraints)
+                "discarded_constraints": self.discarded_constraints,
+                "discarded_constraints_ratio": self.discarded_constraints / (self.discarded_constraints + self.generated_constraints)
                 }
 
     def solve_model(self, data):
