@@ -6,14 +6,14 @@ from planner.utils import SolutionVisualizer
 from planner.data_maker import DataDescriptor, DataMaker
 
 variant = sys.argv[1] == "True"
-maxIterations = int(sys.argv[2])
+max_iterations = int(sys.argv[2])
 
 solvers = ["cplex"]
 size = [100, 150, 200]
 covid = [0.25]
 anesthesia = [0.2, 0.5, 0.8]
 anesthetists = [1, 2]
-robustness_parameter = [0, 3]
+robustness_parameter = [0, 2, 3, 5]
 
 logging.basicConfig(filename='./planner/times_collecting/times/vanilla_LBBD_times.log', encoding='utf-8', level=logging.INFO)
 logging.info("Solver\tSize\tRobustness\tCovid\tAnesthesia\tAnesthetists\tcumulated_building_time\tTotal_run_time\tSolver_time\tStatus_OK\tObjective_Function_Value\tGap\tMP_Time_Limit_Hit\tSP_Time_Limit_Hit\tIterations\tSpecialty_1_OR_usage\tSpecialty_2_OR_usage\tSpecialty_1_selected_ratio\tSpecialty_2_selected_ratio\tgenerated_constraints\tdiscarded_constraints\tdiscarded_constraints_ratio")
@@ -25,7 +25,7 @@ for solver in solvers:
                 for a in anesthesia:
                     for at in anesthetists:
 
-                        planner = VanillaLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=maxIterations, solver=solver)
+                        planner = HeuristicLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
 
                         data_descriptor = DataDescriptor(patients=s,
                                                         days=5,
