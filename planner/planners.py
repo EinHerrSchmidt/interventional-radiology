@@ -19,9 +19,10 @@ class Planner(ABC):
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
             self.timeLimit = 'timelimit'
-            self.gap = 'mipgap'
-            self.solver.options['emphasis'] = "mip 2"
-            # self.solver.options['threads'] = 2
+            # self.gap = 'mip tolerances mipgap'
+            self.gap = 'mip tolerances mipgap'
+            self.solver.options['emphasis'] = "mip 3"
+            # self.solver.options['threads'] = 6
         if(solver == "gurobi"):
             self.timeLimit = 'timelimit'
             self.gap = 'mipgap'
@@ -37,7 +38,7 @@ class Planner(ABC):
             # self.solver.options['printingOptions'] = "normal"
 
         self.solver.options[self.timeLimit] = timeLimit
-        self.solver.options[self.gap] = gap
+        self.solver.options["mip tolerances mipgap"] = 1e-6
 
         self.reset_run_info()
 
@@ -111,6 +112,27 @@ class Planner(ABC):
     def z_rule_3(self, model, q, alpha, i, k, t):
         self.generated_constraints += 1
         return model.z[q, alpha, i, k, t] >= model.beta[alpha, i, t] + model.delta[q, i, k, t] - 1
+    
+    def symmetry_rule(self, model, t1, t2):
+        if t1 >= t2:
+            return pyo.Constraint.Skip
+        return sum(model.x[i, k, t1] for i in model.i for k in model.k) >= sum(model.x[i, k, t2] for i in model.i for k in model.k)
+
+    def anesthesia_symmetry_rule(self, model, t1, t2):
+        if t1 >= t2:
+            return pyo.Constraint.Skip
+        return sum(model.beta[alpha, i, t1] for i in model.i for alpha in model.alpha) >= sum(model.beta[alpha, i, t2] for i in model.i for alpha in model.alpha)
+
+    def delay_symmetry_rule(self, model, t1, t2):
+        if t1 >= t2:
+            return pyo.Constraint.Skip
+        return sum(model.delta[q, i, k, t1] for q in model.q for i in model.i for k in model.k) >= sum(model.delta[q, i, k, t2] for q in model.q for i in model.i for k in model.k)
+
+    def z_symmetry_rule(self, model, t1, t2):
+        if t1 >= t2:
+            return pyo.Constraint.Skip
+        return sum(model.z[q, alpha, i, k, t1] for q in model.q for alpha in model.alpha for i in model.i for k in model.k) >= sum(model.z[q, alpha, i, k, t2] for q in model.q for alpha in model.alpha for i in model.i for k in model.k)
+
 
     # patients with same anesthetist on same day but different room cannot overlap
     @abstractmethod
@@ -142,9 +164,11 @@ class Planner(ABC):
         pass
 
     def objective_function(self, model):
-        N = 1 / (sum(model.r[i] for i in model.i))
+        N = (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
-        return sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q) + N * R
+        D = sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q)
+        M = sum(model.d[q, i] for i in model.i for q in model.q)
+        return  D + R / N
 
     # constraints
     def define_single_surgery_constraints(self, model):
@@ -268,6 +292,32 @@ class Planner(ABC):
             model.k,
             model.t,
             rule=lambda model, q, alpha, i, k, t: self.z_rule_3(model, q, alpha, i, k, t))
+        
+    def define_symmetry_constraints(self, model):
+            model.symmetry_constraint = pyo.Constraint(
+            model.t,
+            model.t,
+            rule=lambda model, t1, t2: self.symmetry_rule(model, t1, t2))
+
+    def define_anesthesia_symmetry_constraints(self, model):
+            model.anesthesia_symmetry_constraint = pyo.Constraint(
+            model.t,
+            model.t,
+            rule=lambda model, t1, t2: self.anesthesia_symmetry_rule(model, t1, t2))
+        
+    def define_delay_symmetry_constraints(self, model):
+            model.delay_symmetry_constraint = pyo.Constraint(
+            model.t,
+            model.t,
+            rule=lambda model, t1, t2: self.delay_symmetry_rule(model, t1, t2))
+
+    def define_z_symmetry_constraints(self, model):
+            model.z_symmetry_constraint = pyo.Constraint(
+            model.t,
+            model.t,
+            rule=lambda model, t1, t2: self.z_symmetry_rule(model, t1, t2))
+            
+        
 
     def define_objective(self, model):
         model.objective = pyo.Objective(
@@ -488,6 +538,10 @@ class SimplePlanner(Planner):
         self.define_anesthetist_assignment_constraint(self.model)
         self.define_z_variables(self.model)
         self.define_z_constraints(self.model)
+        self.define_symmetry_constraints(self.model)
+        # self.define_anesthesia_symmetry_constraints(self.model)
+        # self.define_delay_symmetry_constraints(self.model)
+        # self.define_z_symmetry_constraints(self.model)
         self.define_anesthetist_time_constraint(self.model)
         self.define_anesthetist_no_overlap_constraint(self.model)
         self.define_lambda_constraint(self.model)
@@ -504,6 +558,27 @@ class SimplePlanner(Planner):
         self.model_instance = self.model.create_instance(data)
         elapsed = (time.time() - t)
         self.cumulated_building_time += elapsed
+
+    def fix_vars(self, model_instance):
+        for i in model_instance.i:
+            if model_instance.a[i] == 0:
+                for alpha in model_instance.alpha:
+                    for t in model_instance.t:
+                        model_instance.beta[alpha, i, t].fix(0)
+            if model_instance.specialty[i] == 1:
+                for k in [3, 4]:
+                    for t in model_instance.t:
+                        model_instance.x[i, k, t].fix(0)
+                        model_instance.delta[1, i, k, t].fix(0)
+                        for alpha in model_instance.alpha:
+                            model_instance.z[1, alpha, i, k, t].fix(0)
+            if model_instance.specialty[i] == 2:
+                for k in [1, 2]:
+                    for t in model_instance.t:
+                        model_instance.x[i, k, t].fix(0)
+                        model_instance.delta[1, i, k, t].fix(0)
+                        for alpha in model_instance.alpha:
+                            model_instance.z[1, alpha, i, k, t].fix(0)
 
     def fix_y_variables(self, model_instance):
         print("Fixing y variables...")
@@ -554,6 +629,7 @@ class SimplePlanner(Planner):
         self.reset_run_info()
         self.define_model()
         self.create_model_instance(data)
+        self.fix_vars(self.model_instance)
         self.fix_y_variables(self.model_instance)
         print("Solving model instance...")
         self.model.results = self.solver.solve(self.model_instance, tee=True)
@@ -603,6 +679,10 @@ class TwoPhasePlanner(Planner):
         self.define_anesthetist_assignment_constraint(self.MP_model)
         self.define_z_variables(self.MP_model)
         self.define_z_constraints(self.MP_model)
+        self.define_symmetry_constraints(self.MP_model)
+        # self.define_anesthesia_symmetry_constraints(self.MP_model)
+        # self.define_delay_symmetry_constraints(self.MP_model)
+        # self.define_z_symmetry_constraints(self.MP_model)
         self.define_anesthetist_time_constraint(self.MP_model)
 
     def define_x_parameters(self):
@@ -633,6 +713,10 @@ class TwoPhasePlanner(Planner):
         self.define_anesthetist_assignment_constraint(self.SP_model)
         self.define_z_variables(self.SP_model)
         self.define_z_constraints(self.SP_model)
+        self.define_symmetry_constraints(self.SP_model)
+        # self.define_anesthesia_symmetry_constraints(self.SP_model)
+        # self.define_delay_symmetry_constraints(self.SP_model)
+        # self.define_z_symmetry_constraints(self.SP_model)
         self.define_anesthetist_time_constraint(self.SP_model)
 
         # SP's components
@@ -672,6 +756,8 @@ class TwoPhasePlanner(Planner):
         self.solver_time += self.solver._last_solve_time
         self.MP_time_limit_hit = self.MP_model.results.solver.termination_condition in [TerminationCondition.maxTimeLimit]
         self.MP_objective_function_value = pyo.value(self.MP_instance.objective)
+
+        self.objective_values.append(self.MP_objective_function_value)
 
         resultsAsString = str(self.MP_model.results)
         self.MP_upper_bound = float(re.search("Upper bound: -*(\d*\.\d*)", resultsAsString).group(1))
@@ -770,28 +856,31 @@ class LBBDPlanner(TwoPhasePlanner):
             model.t,
             rule=lambda model, t: self.MP_anesthetist_time_rule(model, t))
 
-    def define_MP(self):
-        self.define_sets(self.MP_model)
-        self.define_parameters(self.MP_model)
-        self.define_x_variables(self.MP_model)
-        self.define_delta_variables(self.MP_model)
-        self.define_single_delay_constraints(self.MP_model)
-        self.define_robustness_constraints(self.MP_model)
-        self.define_delay_implication_constraint(self.MP_model)
-        self.define_single_surgery_constraints(self.MP_model)
-        self.define_surgery_time_constraints(self.MP_model)
-        self.define_specialty_assignment_constraints(self.MP_model)
-        self.define_anesthetists_number_param(self.MP_model)
-        self.define_anesthetists_range_set(self.MP_model)
-        self.define_anesthetists_availability(self.MP_model)
-        self.define_MP_anesthetist_time_constraint(self.MP_model)
+    # def define_MP(self):
+    #     self.define_sets(self.MP_model)
+    #     self.define_parameters(self.MP_model)
+    #     self.define_x_variables(self.MP_model)
+    #     self.define_delta_variables(self.MP_model)
+    #     self.define_single_delay_constraints(self.MP_model)
+    #     self.define_robustness_constraints(self.MP_model)
+    #     self.define_delay_implication_constraint(self.MP_model)
+    #     self.define_single_surgery_constraints(self.MP_model)
+    #     self.define_surgery_time_constraints(self.MP_model)
+    #     self.define_specialty_assignment_constraints(self.MP_model)
+    #     self.define_anesthetists_number_param(self.MP_model)
+    #     self.define_anesthetists_range_set(self.MP_model)
+    #     self.define_anesthetists_availability(self.MP_model)
+    #     self.define_MP_anesthetist_time_constraint(self.MP_model)
 
     def add_objective_cut(self):
-        self.MP_instance.objective_function_cuts.clear()
+        # self.MP_instance.objective_function_cuts.clear()
 
-        N = 1 / (sum(self.MP_instance.r[i] for i in self.MP_instance.i))
+        N = (sum(self.MP_instance.r[i] for i in self.MP_instance.i))
         R = sum(self.MP_instance.x[i, k, t] * self.MP_instance.r[i] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t)
-        cut = sum(self.MP_instance.d[q, i] * self.MP_instance.delta[q, i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t for q in self.MP_instance.q) + N * R <= self.MP_upper_bound
+        D = sum(self.MP_instance.d[q, i] * self.MP_instance.delta[q, i, k, t] for i in self.MP_instance.i for k in self.MP_instance.k for t in self.MP_instance.t for q in self.MP_instance.q)
+        M = sum(self.MP_instance.d[q, i] for i in self.MP_instance.i for q in self.MP_instance.q)        
+        cut = D + R / N <= pyo.value(self.MP_instance.objective)
+
         self.MP_instance.objective_function_cuts.add(cut)
 
     def add_patients_cut(self):
@@ -806,6 +895,27 @@ class LBBDPlanner(TwoPhasePlanner):
             self.best_SP_solution_value = SP_objective_value
             self.solution = Solution(self.SP_instance)
 
+    def fix_MP_vars(self):
+        for i in self.MP_instance.i:
+            if self.MP_instance.a[i] == 0:
+                for alpha in self.MP_instance.alpha:
+                    for t in self.MP_instance.t:
+                        self.MP_instance.beta[alpha, i, t].fix(0)
+            if self.MP_instance.specialty[i] == 1:
+                for k in [3, 4]:
+                    for t in self.MP_instance.t:
+                        self.MP_instance.x[i, k, t].fix(0)
+                        self.MP_instance.delta[1, i, k, t].fix(0)
+                        for alpha in self.MP_instance.alpha:
+                            self.MP_instance.z[1, alpha, i, k, t].fix(0)
+            if self.MP_instance.specialty[i] == 2:
+                for k in [1, 2]:
+                    for t in self.MP_instance.t:
+                        self.MP_instance.x[i, k, t].fix(0)
+                        self.MP_instance.delta[1, i, k, t].fix(0)
+                        for alpha in self.MP_instance.alpha:
+                            self.MP_instance.z[1, alpha, i, k, t].fix(0)
+
     def solve_model(self, data):
         self.reset_run_info()
         self.define_model()
@@ -819,9 +929,15 @@ class LBBDPlanner(TwoPhasePlanner):
         self.solution = None
         self.MP_least_upper_bound = inf
         self.best_SP_solution_value = 0
+
+        self.objective_values = []
+        self.D_ikt = []
+        self.NR = []
+
         while self.iterations < self.iterations_cap:
             self.iterations += 1
             # MP
+            self.fix_MP_vars()
             self.solve_MP()
 
             if self.MP_upper_bound < self.MP_least_upper_bound:
@@ -847,6 +963,9 @@ class LBBDPlanner(TwoPhasePlanner):
 
         self.status_ok = self.SP_model.results and self.SP_model.results.solver.status == SolverStatus.ok
         self.compute_gap_and_solution_value()
+        print(self.objective_values)
+        print(self.D_ikt)
+        print(self.NR)
 
     def compute_gap_and_solution_value(self):
         self.objective_function_value = None

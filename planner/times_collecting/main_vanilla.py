@@ -8,9 +8,9 @@ from planner.data_maker import DataDescriptor, DataMaker
 solvers = ["cplex"]
 size = [100, 150, 200]
 covid = [0.25]
-anesthesia = [0.2, 0.5, 0.8]
-anesthetists = [1, 2]
-robustness_parameter = [0, 2, 3, 5]
+anesthesia = [0.2]
+anesthetists = [1]
+robustness_parameter = [2]
 
 logging.basicConfig(filename='./planner/times_collecting/times/vanilla_times.log', encoding='utf-8', level=logging.INFO)
 logging.info("Solver\tSize\tCovid\tAnesthesia\tAnesthetists\tBuilding_time\tRun_time\tSolverTime\tStatus_OK\tObjective_Function_Value\tTime_Limit_Hit\tUpper_bound\tGap\tspecialty_1_OR_utilization\tspecialty_2_OR_utilization\tspecialty_1_selection_ratio\tspecialty_2_selection_ratio\tgenerated_constraints\tdiscarded_constraints\tdiscarded_constraints_ratio")
@@ -43,8 +43,8 @@ for solver in solvers:
                         solution = planner.extract_solution()
                         if solution:
                             sv = SolutionVisualizer()
-                            # sv.print_solution(solution)
-                            # sv.plot_graph(solution)
+                            sv.print_solution(solution)
+                            sv.plot_graph(solution)
 
                         logging.info(solver + "\t"
                                         + str(s) + "\t"

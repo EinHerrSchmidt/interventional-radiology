@@ -8,4 +8,4 @@ if __name__ == '__main__':
     # LBBD (heuristic rule)
     os.system("python -m planner.times_collecting.main_LBBD True 30")
     # LBBD (Vanilla)
-    # os.system("python -m planner.times_collecting.main_LBBD False 30")
+    os.system("python -m planner.times_collecting.main_LBBD False 30")

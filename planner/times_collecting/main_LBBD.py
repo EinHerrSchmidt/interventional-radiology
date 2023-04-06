@@ -25,7 +25,10 @@ for solver in solvers:
                 for a in anesthesia:
                     for at in anesthetists:
 
-                        planner = HeuristicLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
+                        if variant:
+                            planner = HeuristicLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
+                        else:
+                            planner = VanillaLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
 
                         data_descriptor = DataDescriptor(patients=s,
                                                         days=5,
@@ -38,7 +41,7 @@ for solver in solvers:
                         dataMaker = DataMaker(seed=52876, data_descriptor=data_descriptor)
                         dataDictionary = dataMaker.create_data_dictionary()
                         t = time.time()
-                        dataMaker.print_data(dataDictionary)
+                        # dataMaker.print_data(dataDictionary)
                         planner.solve_model(dataDictionary)
                         run_info = planner.extract_run_info()
                         elapsed = (time.time() - t)
@@ -46,8 +49,8 @@ for solver in solvers:
                         solution = planner.extract_solution()
                         if solution:
                             sv = SolutionVisualizer()
-                            sv.print_solution(solution)
-                            sv.plot_graph(solution)
+                            # sv.print_solution(solution)
+                            # sv.plot_graph(solution)
 
                         logging.info(solver + "\t"
                                         + str(s) + "\t"
