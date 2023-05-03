@@ -228,17 +228,6 @@ class DataMaker:
                 robustness_table[(1, k, t)] = self.data_descriptor.robustness_parameter
 
         return robustness_table
-    
-    def generate_symmetry_breaking_parameter(self):
-        dict = {}
-        for i1 in range(0, len(self.precedences)):
-            for i2 in range(0, len(self.precedences)):
-                dict[(i1 + 1, i2 + 1)] = 0
-                if(i1 == i2):
-                    continue
-                if(self.arrival_delays[i1] == self.arrival_delays[i2] and self.priorities[i1] > self.priorities[i2]):
-                    dict[(i1 + 1, i2 + 1)] = 1
-        return dict
 
     def create_data_dictionary(self):
         # for now we assume same duration for each room, on each day
@@ -262,17 +251,12 @@ class DataMaker:
                 'a': self.create_dictionary_entry(self.anesthesia_flags),
                 'c': self.create_dictionary_entry(self.infection_flags),
                 'u': self.generate_u_parameter(),
-                'o': self.generate_symmetry_breaking_parameter(),
                 'patientId': self.create_dictionary_entry([i for i in range(1, self.data_descriptor.patients + 1)]),
                 'specialty': self.create_dictionary_entry(self.specialties),
                 'precedence': self.create_dictionary_entry(self.precedences),
                 'bigM': {
                     1: math.floor(maxOperatingRoomTime/min(self.operating_times)),
-                    2: maxOperatingRoomTime,
-                    3: maxOperatingRoomTime,
-                    4: maxOperatingRoomTime,
-                    5: maxOperatingRoomTime,
-                    6: self.data_descriptor.patients
+                    2: maxOperatingRoomTime
                 }
             }
         }

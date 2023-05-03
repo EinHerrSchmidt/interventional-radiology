@@ -97,8 +97,10 @@ class Planner(ABC):
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
     def anesthetist_time_rule(self, model, alpha, t):
+        if sum(model.a[i] for i in model.i) == 0:
+            return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q) <= model.An[alpha, t]
+        return sum(model.beta[alpha, i, t] * model.p[i] for i in model.i if model.a[i] == 1) + sum(model.z[q, alpha, i, k, t] * model. d[q, i] for i in model.i for k in model.k for q in model.q if model.a[i] == 1) <= model.An[alpha, t]
 
     # needed for linearizing product of binary variables
     def z_rule_1(self, model, q, alpha, i, k, t):
@@ -113,38 +115,10 @@ class Planner(ABC):
         self.generated_constraints += 1
         return model.z[q, alpha, i, k, t] >= model.beta[alpha, i, t] + model.delta[q, i, k, t] - 1
     
-    def specialty_pruning_rule(self, model, j):
-        if j == 1:
-            return sum(model.z[q, alpha, i, k, t] for q in model.q for alpha in model. alpha for i in model.i for k in [1, 2] for t in model.t if model.specialty[i] == 1) + sum(model.delta[q, i, k, t] for q in model.q for i in model.i for k in [1, 2] for t in model.t if model.specialty[i] == 1) + sum(model.x[i, k, t] for i in model.i for k in [3, 4] for t in model.t if model.specialty[i] == 1) <= 0
-        else:
-            return sum(model.z[q, alpha, i, k, t] for q in model.q for alpha in model. alpha for i in model.i for k in [3, 4] for t in model.t if model.specialty[i] == 2) + sum(model.delta[q, i, k, t] for q in model.q for i in model.i for k in [3, 4] for t in model.t if model.specialty[i] == 2) + sum(model.x[i, k, t] for i in model.i for k in [1, 2] for t in model.t if model.specialty[i] == 2) <= 0
-
     def symmetry_rule(self, model, t1, t2):
         if t1 >= t2:
             return pyo.Constraint.Skip
         return sum(model.x[i, k, t1] for i in model.i for k in model.k) >= sum(model.x[i, k, t2] for i in model.i for k in model.k)
-
-    def room_symmetry_rule(self, model, k1, k2):
-        if k1 >= k2:
-            return pyo.Constraint.Skip
-        return sum(model.x[i, k1, t] for i in model.i for t in model.t) >= sum(model.x[i, k2, t] for i in model.i for t in model.t)
- 
-
-    def anesthesia_symmetry_rule(self, model, t1, t2):
-        if t1 >= t2:
-            return pyo.Constraint.Skip
-        return sum(model.beta[alpha, i, t1] for i in model.i for alpha in model.alpha) >= sum(model.beta[alpha, i, t2] for i in model.i for alpha in model.alpha)
-
-    def delay_symmetry_rule(self, model, t1, t2):
-        if t1 >= t2:
-            return pyo.Constraint.Skip
-        return sum(model.delta[q, i, k, t1] for q in model.q for i in model.i for k in model.k) >= sum(model.delta[q, i, k, t2] for q in model.q for i in model.i for k in model.k)
-
-    def z_symmetry_rule(self, model, t1, t2):
-        if t1 >= t2:
-            return pyo.Constraint.Skip
-        return sum(model.z[q, alpha, i, k, t1] for q in model.q for alpha in model.alpha for i in model.i for k in model.k) >= sum(model.z[q, alpha, i, k, t2] for q in model.q for alpha in model.alpha for i in model.i for k in model.k)
-
 
     # patients with same anesthetist on same day but different room cannot overlap
     @abstractmethod
@@ -179,7 +153,6 @@ class Planner(ABC):
         N = (sum(model.r[i] for i in model.i))
         R = sum(model.x[i, k, t] * model.r[i] for i in model.i for k in model.k for t in model.t)
         D = sum(model.d[q, i] * model.delta[q, i, k, t] for i in model.i for k in model.k for t in model.t for q in model.q)
-        M = sum(model.d[q, i] for i in model.i for q in model.q)
         return  D + R / N
 
     # constraints
@@ -310,39 +283,6 @@ class Planner(ABC):
             model.t,
             model.t,
             rule=lambda model, t1, t2: self.symmetry_rule(model, t1, t2))
-
-    def define_room_symmetry_constraints(self, model):
-            model.room_symmetry_constraint = pyo.Constraint(
-            model.k,
-            model.k,
-            # model.t,
-            rule=lambda model, k1, k2: self.room_symmetry_rule(model, k1, k2))
-
-
-    def define_specialty_pruning_constraints(self, model):
-            model.specialty_pruning_constraint = pyo.Constraint(
-            model.j,
-            rule=lambda model, j: self.specialty_pruning_rule(model, j))
-
-    def define_anesthesia_symmetry_constraints(self, model):
-            model.anesthesia_symmetry_constraint = pyo.Constraint(
-            model.t,
-            model.t,
-            rule=lambda model, t1, t2: self.anesthesia_symmetry_rule(model, t1, t2))
-        
-    def define_delay_symmetry_constraints(self, model):
-            model.delay_symmetry_constraint = pyo.Constraint(
-            model.t,
-            model.t,
-            rule=lambda model, t1, t2: self.delay_symmetry_rule(model, t1, t2))
-
-    def define_z_symmetry_constraints(self, model):
-            model.z_symmetry_constraint = pyo.Constraint(
-            model.t,
-            model.t,
-            rule=lambda model, t1, t2: self.z_symmetry_rule(model, t1, t2))
-            
-        
 
     def define_objective(self, model):
         model.objective = pyo.Objective(
@@ -492,7 +432,7 @@ class SimplePlanner(Planner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     def lambda_rule(self, model, i1, i2, t):
         if(i1 >= i2 or not (model.a[i1] == 1 and model.a[i2] == 1)):
@@ -517,7 +457,7 @@ class SimplePlanner(Planner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if(i1 == i2 or model.u[i1, i2] == 0
@@ -564,11 +504,6 @@ class SimplePlanner(Planner):
         self.define_z_variables(self.model)
         self.define_z_constraints(self.model)
         self.define_symmetry_constraints(self.model)
-        self.define_room_symmetry_constraints(self.model)
-        # self.define_specialty_pruning_constraints(self.model)
-        # self.define_anesthesia_symmetry_constraints(self.model)
-        # self.define_delay_symmetry_constraints(self.model)
-        # self.define_z_symmetry_constraints(self.model)
         self.define_anesthetist_time_constraint(self.model)
         self.define_anesthetist_no_overlap_constraint(self.model)
         self.define_lambda_constraint(self.model)
@@ -707,11 +642,6 @@ class TwoPhasePlanner(Planner):
         self.define_z_variables(self.MP_model)
         self.define_z_constraints(self.MP_model)
         self.define_symmetry_constraints(self.MP_model)
-        self.define_room_symmetry_constraints(self.MP_model)
-        # self.define_specialty_pruning_constraints(self.MP_model)
-        self.define_anesthesia_symmetry_constraints(self.MP_model)
-        self.define_delay_symmetry_constraints(self.MP_model)
-        self.define_z_symmetry_constraints(self.MP_model)
         self.define_anesthetist_time_constraint(self.MP_model)
 
     def define_x_parameters(self):
@@ -743,11 +673,6 @@ class TwoPhasePlanner(Planner):
         self.define_z_variables(self.SP_model)
         self.define_z_constraints(self.SP_model)
         self.define_symmetry_constraints(self.SP_model)
-        self.define_room_symmetry_constraints(self.SP_model)
-        # self.define_specialty_pruning_constraints(self.SP_model)
-        self.define_anesthesia_symmetry_constraints(self.SP_model)
-        self.define_delay_symmetry_constraints(self.SP_model)
-        self.define_z_symmetry_constraints(self.SP_model)
         self.define_anesthetist_time_constraint(self.SP_model)
 
         # SP's components
@@ -887,22 +812,6 @@ class LBBDPlanner(TwoPhasePlanner):
             model.t,
             rule=lambda model, t: self.MP_anesthetist_time_rule(model, t))
 
-    # def define_MP(self):
-    #     self.define_sets(self.MP_model)
-    #     self.define_parameters(self.MP_model)
-    #     self.define_x_variables(self.MP_model)
-    #     self.define_delta_variables(self.MP_model)
-    #     self.define_single_delay_constraints(self.MP_model)
-    #     self.define_robustness_constraints(self.MP_model)
-    #     self.define_delay_implication_constraint(self.MP_model)
-    #     self.define_single_surgery_constraints(self.MP_model)
-    #     self.define_surgery_time_constraints(self.MP_model)
-    #     self.define_specialty_assignment_constraints(self.MP_model)
-    #     self.define_anesthetists_number_param(self.MP_model)
-    #     self.define_anesthetists_range_set(self.MP_model)
-    #     self.define_anesthetists_availability(self.MP_model)
-    #     self.define_MP_anesthetist_time_constraint(self.MP_model)
-
     def add_objective_cut(self):
         # self.MP_instance.objective_function_cuts.clear()
 
@@ -1020,7 +929,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     def end_of_day_rule(self, model, i, k, t):
         if(model.status[i, k, t] == Planner.DISCARDED):
@@ -1044,7 +953,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
@@ -1147,7 +1056,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[3] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     def end_of_day_rule(self, model, i, k, t):
         if(model.x_param[i, k, t] == 0):
@@ -1171,7 +1080,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
-        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[5] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
+        return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if( model.x_param[i1, k, t] + model.x_param[i2, k, t] < 2):
