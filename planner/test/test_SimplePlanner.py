@@ -12,7 +12,7 @@ class TestSimplePlanner(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = SimplePlanner(timeLimit=900, gap=0.05, solver="cplex")
+        planner = SimplePlanner(timeLimit=60, gap=0.01, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

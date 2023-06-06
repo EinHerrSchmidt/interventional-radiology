@@ -1,4 +1,5 @@
 import unittest
+from planner.utils import SolutionVisualizer
 
 from planners import VanillaLBBDPlanner
 from test.common import build_data_dictionary
@@ -12,7 +13,7 @@ class TestVanillaLBBDPlanner(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = VanillaLBBDPlanner(timeLimit=900, gap=0.01, iterations_cap=30, solver="cplex")
+        planner = VanillaLBBDPlanner(timeLimit=60, gap=0.01, iterations_cap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 

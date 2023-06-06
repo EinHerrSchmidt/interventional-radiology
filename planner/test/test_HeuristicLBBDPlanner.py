@@ -12,7 +12,7 @@ class TestHeuristicLBBDPlanner(TestCommon):
 
         self.dataDictionary = build_data_dictionary()
 
-        planner = HeuristicLBBDPlanner(timeLimit=900, gap=0.01, iterations_cap=30, solver="cplex")
+        planner = HeuristicLBBDPlanner(timeLimit=60, gap=0.01, iterations_cap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
