@@ -26,9 +26,9 @@ for solver in solvers:
                     for at in anesthetists:
 
                         if variant:
-                            planner = HeuristicLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
+                            planner = HeuristicLBBDPlanner(timeLimit=290, gap = 1e-06, iterations_cap=max_iterations, solver=solver)
                         else:
-                            planner = VanillaLBBDPlanner(timeLimit=290, gap = 0.0, iterations_cap=max_iterations, solver=solver)
+                            planner = VanillaLBBDPlanner(timeLimit=290, gap = 1e-06, iterations_cap=max_iterations, solver=solver)
 
                         data_descriptor = DataDescriptor(patients=s,
                                                         days=5,

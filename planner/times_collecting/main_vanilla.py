@@ -24,7 +24,7 @@ for solver in solvers:
                 for a in anesthesia:
                     for at in anesthetists:
 
-                        planner = SimplePlanner(300, 0.0, solver)
+                        planner = SimplePlanner(300, 1e-06, solver)
 
                         data_descriptor = DataDescriptor(patients=s,
                                                         days=5,
