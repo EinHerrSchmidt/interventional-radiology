@@ -231,7 +231,7 @@ class DataMaker:
 
     def create_data_dictionary(self):
         # for now we assume same duration for each room, on each day
-        maxOperatingRoomTime = 270
+        maxOperatingRoomTime = max(self.data_descriptor.operating_day_duration_table.values())
         return {
             None: {
                 'I': {None: self.data_descriptor.patients},
