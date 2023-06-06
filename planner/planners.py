@@ -38,7 +38,7 @@ class Planner(ABC):
             # self.solver.options['printingOptions'] = "normal"
 
         self.solver.options[self.timeLimit] = timeLimit
-        self.solver.options["mip tolerances mipgap"] = 1e-6
+        self.solver.options[self.gap] = gap
 
         self.reset_run_info()
 
@@ -90,9 +90,6 @@ class Planner(ABC):
         return sum(model.x[i, k, t] for i in model.i if model.specialty[i] == j) <= model.bigM[1] * model.tau[j, k, t]
 
     def anesthetist_assignment_rule(self, model, i, t):
-        if(model.a[i] == 0):
-            self.discarded_constraints += 1
-            return pyo.Constraint.Skip
         self.generated_constraints += 1
         return sum(model.beta[alpha, i, t] for alpha in model.alpha) == model.a[i] * sum(model.x[i, k, t] for k in model.k)
 
