@@ -446,8 +446,7 @@ class SimplePlanner(Planner):
     def time_ordering_precedence_rule(self, model, i1, i2, k, t):
         if(i1 == i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -456,8 +455,7 @@ class SimplePlanner(Planner):
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
         if(i1 == i2 or model.u[i1, i2] == 0
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -466,8 +464,7 @@ class SimplePlanner(Planner):
     def exclusive_precedence_rule(self, model, i1, i2, k, t):
         if(i1 >= i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -521,20 +518,14 @@ class SimplePlanner(Planner):
                 for alpha in model_instance.alpha:
                     for t in model_instance.t:
                         model_instance.beta[alpha, i, t].fix(0)
-            if model_instance.specialty[i] == 1:
-                for k in [3, 4]:
-                    for t in model_instance.t:
+            for k in model_instance.k:
+                for t in model_instance.t:
+                    if model_instance.tau[model_instance.specialty[i], k, t] == 0:
                         model_instance.x[i, k, t].fix(0)
                         model_instance.delta[1, i, k, t].fix(0)
                         for alpha in model_instance.alpha:
                             model_instance.z[1, alpha, i, k, t].fix(0)
-            if model_instance.specialty[i] == 2:
-                for k in [1, 2]:
-                    for t in model_instance.t:
-                        model_instance.x[i, k, t].fix(0)
-                        model_instance.delta[1, i, k, t].fix(0)
-                        for alpha in model_instance.alpha:
-                            model_instance.z[1, alpha, i, k, t].fix(0)
+
 
     def fix_y_variables(self, model_instance):
         print("Fixing y variables...")
@@ -936,8 +927,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 == i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -949,8 +939,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 == i2 or model.u[i1, i2] == 0
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -965,8 +954,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 >= i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -1017,7 +1005,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             for k in self.MP_instance.k:
                 for t in self.MP_instance.t:
                     for i in self.MP_instance.i:
-                        if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                        if(self.MP_instance.tau[self.MP_instance.specialty[i], k, t] == 0):
                             self.MP_instance.delta[q, i, k, t].fix(0)
                             fixed += 1
         print(str(fixed) + " delta variables fixed.")
@@ -1028,7 +1016,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if(self.MP_instance.specialty[i] == 1 and k in [3, 4] or self.MP_instance.specialty[i] == 2 and k in [1, 2]):
+                    if(self.MP_instance.tau[self.MP_instance.specialty[i], k, t] == 0):
                         self.MP_instance.x[i, k, t].fix(0)
                         fixed += 1
         print(str(fixed) + " x variables fixed.")
@@ -1063,8 +1051,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 == i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -1076,8 +1063,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 == i2 or model.u[i1, i2] == 0
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -1089,8 +1075,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
             return pyo.Constraint.Skip
         if(i1 >= i2
            or (model.specialty[i1] != model.specialty[i2])
-           or (model.specialty[i1] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i1] == 2 and (k == 1 or k == 2))):
+           or (model.tau[model.specialty[i1], k, t] == 0)):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
