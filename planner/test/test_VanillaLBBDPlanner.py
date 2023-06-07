@@ -17,6 +17,10 @@ class TestVanillaLBBDPlanner(TestCommon):
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
 
+        # sv = SolutionVisualizer()
+        # sv.print_solution(self.solution)
+        # sv.plot_graph(self.solution)
+
     def test_non_empty_solution(self):
         self.non_empty_solution()
 

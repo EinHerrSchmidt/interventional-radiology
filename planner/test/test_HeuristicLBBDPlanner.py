@@ -1,4 +1,5 @@
 import unittest
+from planner.utils import SolutionVisualizer
 
 from planners import HeuristicLBBDPlanner
 from test.common import build_data_dictionary
@@ -15,6 +16,10 @@ class TestHeuristicLBBDPlanner(TestCommon):
         planner = HeuristicLBBDPlanner(timeLimit=60, gap=0.01, iterations_cap=30, solver="cplex")
         planner.solve_model(self.dataDictionary)
         self.solution = planner.extract_solution()
+
+        # sv = SolutionVisualizer()
+        # sv.print_solution(self.solution)
+        # sv.plot_graph(self.solution)
 
     def test_non_empty_solution(self):
         self.non_empty_solution()
