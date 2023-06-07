@@ -11,10 +11,7 @@ from planner.model import Patient
 
 
 class Planner(ABC):
-
-    DISCARDED = 0
-    FREE = 1
-
+    
     def __init__(self, timeLimit, gap, solver):
         self.solver = pyo.SolverFactory(solver)
         if(solver == "cplex"):
@@ -646,11 +643,6 @@ class TwoPhasePlanner(Planner):
                                           self.SP_model.k,
                                           self.SP_model.t)
 
-    def define_status_parameters(self):
-        self.SP_model.status = pyo.Param(self.SP_model.i,
-                                         self.SP_model.k,
-                                         self.SP_model.t)
-
     def define_SP(self):
         self.define_sets(self.SP_model)
         self.define_parameters(self.SP_model)
@@ -674,7 +666,6 @@ class TwoPhasePlanner(Planner):
 
         # SP's components
         self.define_x_parameters()
-        self.define_status_parameters()
         self.define_lambda_variables(self.SP_model)
         self.define_y_variables(self.SP_model)
         self.define_gamma_variables(self.SP_model)
@@ -919,7 +910,7 @@ class LBBDPlanner(TwoPhasePlanner):
 class HeuristicLBBDPlanner(LBBDPlanner):
 
     def anesthetist_no_overlap_rule(self, model, i1, i2, k1, k2, t, alpha):
-        if(model.status[i1, k1, t] == Planner.DISCARDED or model.status[i2, k2, t] == Planner.DISCARDED):
+        if(model.x_param[i1, k1, t] == 0 or model.x_param[i2, k2, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2 or k1 == k2 or model.a[i1] * model.a[i2] == 0):
@@ -929,7 +920,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k1, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (5 - model.beta[alpha, i1, t] - model.beta[alpha, i2, t] - model.x[i1, k1, t] - model.x[i2, k2, t] - model.Lambda[i1, i2, t])
 
     def end_of_day_rule(self, model, i, k, t):
-        if(model.status[i, k, t] == Planner.DISCARDED):
+        if(model.x_param[i, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if((model.specialty[i] == 1 and (k == 3 or k == 4))
@@ -940,7 +931,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         return model.gamma[i] + model.p[i] + sum(model.d[q, i] * model.delta[q, i, k, t] for q in model.q) <= model.s[k, t]
 
     def time_ordering_precedence_rule(self, model, i1, i2, k, t):
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+        if(model.x_param[i1, k, t] == 0 or model.x_param[i2, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2
@@ -953,7 +944,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         return model.gamma[i1] + model.p[i1] + sum(model.d[q, i1] * model.delta[q, i1, k, t] for q in model.q) <= model.gamma[i2] + model.bigM[2] * (3 - model.x[i1, k, t] - model.x[i2, k, t] - model.y[i1, i2, k, t])
 
     def start_time_ordering_priority_rule(self, model, i1, i2, k, t):
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+        if(model.x_param[i1, k, t] == 0 or model.x_param[i2, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 == i2 or model.u[i1, i2] == 0
@@ -969,7 +960,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         if(model.specialty[i1] != model.specialty[i2]):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        if(model.status[i1, k, t] == Planner.DISCARDED or model.status[i2, k, t] == Planner.DISCARDED):
+        if(model.x_param[i1, k, t] == 0 or model.x_param[i2, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         if(i1 >= i2
@@ -986,25 +977,25 @@ class HeuristicLBBDPlanner(LBBDPlanner):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         # if patients not on same day
-        if(all(model.status[i1, k, t] == Planner.DISCARDED for k in model.k) or all(model.status[i2, k, t] == Planner.DISCARDED for k in model.k)):
+        if(sum(model.x_param[i1, k, t] for k in model.k) == 0 or sum(model.x_param[i2, k, t] for k in model.k) == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def extend_data(self, data):
-        status_dict = {}
+        x_param_dict = {}
         for i in self.MP_instance.i:
             for t in self.MP_instance.t:
                 # if patient is planned for day t, we allow her to be free in that day
                 if(sum(round(self.MP_instance.x[i, k, t].value) for k in self.MP_instance.k) == 1):
                     for k in range(1, self.MP_instance.K + 1):
-                        status_dict[(i, k, t)] = Planner.FREE
+                        x_param_dict[(i, k, t)] = -1 # FREE
                 # otherwise she is discarded, i.e. we do not allow her to be re-planned to another day t' != t
                 else:
                     for k in range(1, self.MP_instance.K + 1):
-                        status_dict[(i, k, t)] = Planner.DISCARDED
-        data[None]['status'] = status_dict
+                        x_param_dict[(i, k, t)] = 0 # DISCARDED
+        data[None]['x_param'] = x_param_dict
 
     def fix_SP_variables(self):
         print("Fixing x variables for phase two...")
@@ -1012,7 +1003,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         for k in self.MP_instance.k:
             for t in self.MP_instance.t:
                 for i in self.MP_instance.i:
-                    if(self.SP_instance.status[i, k, t] == Planner.DISCARDED):
+                    if(self.SP_instance.x_param[i, k, t] == 0):
                         self.SP_instance.x[i, k, t].fix(0)
                         for q in self.SP_instance.q:
                             self.SP_instance.delta[q, i, k, t].fix(0)
