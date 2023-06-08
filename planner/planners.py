@@ -436,8 +436,7 @@ class SimplePlanner(Planner):
         return model.Lambda[i1, i2, t] + model.Lambda[i2, i1, t] == 1
 
     def end_of_day_rule(self, model, i, k, t):
-        if((model.specialty[i] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+        if(model.tau[model.specialty[i], k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -914,8 +913,7 @@ class HeuristicLBBDPlanner(LBBDPlanner):
         if(model.x_param[i, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        if((model.specialty[i] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+        if(model.tau[model.specialty[i], k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
@@ -1038,8 +1036,7 @@ class VanillaLBBDPlanner(LBBDPlanner):
         if(model.x_param[i, k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
-        if((model.specialty[i] == 1 and (k == 3 or k == 4))
-           or (model.specialty[i] == 2 and (k == 1 or k == 2))):
+        if(model.tau[model.specialty[i], k, t] == 0):
             self.discarded_constraints += 1
             return pyo.Constraint.Skip
         self.generated_constraints += 1
